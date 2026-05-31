@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "graph:init": "tsx scripts/init-graph.ts"
   },
   "dependencies": {
     "neo4j-driver": "^5.28.1",

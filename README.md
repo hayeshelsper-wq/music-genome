@@ -43,7 +43,8 @@ npm install
    `MUSICBRAINZ_USER_AGENT` (their rules). Calls are throttled to 1/sec.
 
 ```bash
-npm run dev      # http://localhost:3000
+npm run graph:init   # verifies Neo4j is reachable + applies constraints
+npm run dev          # http://localhost:3000
 ```
 
 Search an artist → the first load ingests from all sources (a few seconds, gated
