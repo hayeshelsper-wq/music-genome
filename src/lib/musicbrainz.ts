@@ -123,11 +123,17 @@ interface MbReleaseGroupBrowse {
     title: string;
     "first-release-date"?: string;
     "primary-type"?: string;
+    "secondary-types"?: string[];
     genres?: Array<{ name: string; count: number }>;
   }>;
 }
 
-/** Studio albums in chronological order, with their community genres. */
+/**
+ * Studio albums in chronological order, with their community genres.
+ * Excludes anything with a secondary type (compilation, live, remix,
+ * soundtrack, DJ-mix, interview, demo…) so the genre timeline reflects the
+ * actual artistic arc, not greatest-hits packages and live bootlegs.
+ */
 export async function getReleaseGroups(mbid: string): Promise<ReleaseGroup[]> {
   const d = await mb<MbReleaseGroupBrowse>("/release-group", {
     artist: mbid,
@@ -136,6 +142,11 @@ export async function getReleaseGroups(mbid: string): Promise<ReleaseGroup[]> {
     limit: "100",
   });
   return (d["release-groups"] || [])
+    .filter(
+      (rg) =>
+        rg["primary-type"] === "Album" &&
+        (rg["secondary-types"]?.length ?? 0) === 0
+    )
     .map((rg) => ({
       title: rg.title,
       year: year(rg["first-release-date"]),
@@ -145,6 +156,6 @@ export async function getReleaseGroups(mbid: string): Promise<ReleaseGroup[]> {
         .slice(0, 4)
         .map((g) => g.name),
     }))
-    .filter((rg) => rg.year && rg.primaryType === "Album")
+    .filter((rg) => rg.year)
     .sort((a, b) => (a.year! - b.year!));
 }
