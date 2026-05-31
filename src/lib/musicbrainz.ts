@@ -111,6 +111,35 @@ export async function getArtist(
   };
 }
 
+interface MbRecordingBrowse {
+  recordings: Array<{ id: string; title: string; length?: number }>;
+}
+
+/**
+ * Recording-level MBIDs for an artist — the keys we use to look up precomputed
+ * audio features in AcousticBrainz. We intentionally keep *every* distinct
+ * recording id (not deduped by title): a song can have many recording MBIDs
+ * across releases, and only specific ones were ever analyzed, so a wider net
+ * meaningfully improves AcousticBrainz hit-rate.
+ */
+export async function getArtistRecordings(
+  mbid: string,
+  limit = 100
+): Promise<{ id: string; title: string }[]> {
+  const d = await mb<MbRecordingBrowse>("/recording", {
+    artist: mbid,
+    limit: String(limit),
+  });
+  const seen = new Set<string>();
+  const out: { id: string; title: string }[] = [];
+  for (const r of d.recordings || []) {
+    if (!r.id || seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({ id: r.id, title: r.title });
+  }
+  return out;
+}
+
 export interface ReleaseGroup {
   title: string;
   year?: number;
@@ -158,4 +187,60 @@ export async function getReleaseGroups(mbid: string): Promise<ReleaseGroup[]> {
     }))
     .filter((rg) => rg.year)
     .sort((a, b) => (a.year! - b.year!));
+}
+
+interface MbReleaseBrowse {
+  releases: Array<{
+    "release-group"?: { "primary-type"?: string; "secondary-types"?: string[] };
+    media?: Array<{ tracks?: Array<{ recording?: { id: string } }> }>;
+  }>;
+}
+
+/**
+ * Recording MBIDs from the artist's official *studio albums* — the canonical
+ * tracks AcousticBrainz actually analyzed. A blind /recording?artist browse is
+ * mostly un-analyzed live/alt versions (~2% AcousticBrainz coverage for
+ * Radiohead); studio-album tracks are ~96%, which is what makes "typical tempo /
+ * prevailing keys" representative rather than a single random track.
+ *
+ * We page the artist's official album releases with their recordings AND their
+ * release-groups in one browse each, then keep only releases whose group is a
+ * pure studio album (primary Album, no secondary types) — dropping live albums,
+ * compilations, remixes, and box sets. ~3 MusicBrainz calls total (vs one per
+ * album), so it's fast and predictable; worth caching upstream regardless.
+ */
+export async function getStudioRecordingIds(
+  mbid: string,
+  pages = 3
+): Promise<string[]> {
+  const ids = new Set<string>();
+  for (let page = 0; page < pages; page++) {
+    let browse: MbReleaseBrowse;
+    try {
+      browse = await mb<MbReleaseBrowse>("/release", {
+        artist: mbid,
+        type: "album",
+        status: "official",
+        inc: "recordings+release-groups",
+        limit: "100",
+        offset: String(page * 100),
+      });
+    } catch {
+      break; // keep whatever we've gathered so far
+    }
+    const releases = browse.releases || [];
+    if (releases.length === 0) break;
+    for (const r of releases) {
+      const rg = r["release-group"];
+      if (rg?.["primary-type"] !== "Album" || (rg?.["secondary-types"]?.length ?? 0) > 0) {
+        continue; // skip live / compilation / remix / box-set releases
+      }
+      for (const m of r.media || []) {
+        for (const t of m.tracks || []) {
+          if (t.recording?.id) ids.add(t.recording.id);
+        }
+      }
+    }
+  }
+  return [...ids];
 }

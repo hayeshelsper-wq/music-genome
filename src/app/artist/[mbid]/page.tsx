@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Graph from "@/components/Graph";
+import SonicDna from "@/components/SonicDna";
 import { ArtistDnaReport } from "@/lib/types";
 
 export default function ArtistPage() {
@@ -12,6 +13,7 @@ export default function ArtistPage() {
   const [error, setError] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<string | null>(null);
   const [narrLoading, setNarrLoading] = useState(false);
+  const [fallbackName, setFallbackName] = useState<string | null>(null);
 
   useEffect(() => {
     setReport(null);
@@ -43,11 +45,30 @@ export default function ArtistPage() {
     }
   }
 
+  // Graph unavailable (e.g. Neo4j not configured) — don't dead-end. The Sonic
+  // DNA previews are keyless and graph-free, so render those anyway.
   if (error)
     return (
       <div className="container">
-        <p className="error">Error: {error}</p>
-        <Link href="/">← back to search</Link>
+        <Link href="/" className="muted">
+          ← search
+        </Link>
+        <div className="report-header" style={{ marginTop: 16 }}>
+          <h1>{fallbackName || "Artist"}</h1>
+        </div>
+        <div className="notice">
+          Knowledge graph unavailable — the influence tree, collaborator network,
+          genre timeline and DNA narrative need Neo4j (set <code>NEO4J_*</code> in{" "}
+          <code>.env.local</code>). The audio previews below need no setup.
+        </div>
+        <div className="section">
+          <h2>Sonic DNA</h2>
+          <p className="hint">
+            Playable 30-second previews and album art (iTunes). No Spotify, no
+            keys, no database required.
+          </p>
+          <SonicDna mbid={mbid} onName={setFallbackName} />
+        </div>
       </div>
     );
 
@@ -90,6 +111,17 @@ export default function ArtistPage() {
           ))}
         </div>
       )}
+
+      {/* ---- Sonic DNA: previews + audio features ---- */}
+      <div className="section">
+        <h2>Sonic DNA</h2>
+        <p className="hint">
+          Playable 30-second previews and album art (iTunes). Audio-feature
+          analysis — tempo, key, danceability, mood — fades in when AcousticBrainz
+          has data for the artist. No Spotify required.
+        </p>
+        <SonicDna mbid={a.mbid} name={a.name} />
+      </div>
 
       {/* ---- DNA narrative ---- */}
       <div className="section">

@@ -120,3 +120,140 @@ a:hover { text-decoration: underline; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--influence); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .error { color: var(--descendant); }
+
+.notice {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--root);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 16px;
+}
+.notice code {
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* ---- Sonic DNA: audio-feature profile ---- */
+.sonic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.stat-wide { grid-column: span 2; }
+@media (max-width: 520px) { .stat-wide { grid-column: span 1; } }
+.stat-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-value.stat-key { font-size: 24px; text-transform: capitalize; }
+.stat-unit { font-size: 14px; color: var(--muted); margin-left: 6px; font-weight: 500; }
+.stat-sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.meter {
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--influence), var(--collab));
+  border-radius: 999px;
+}
+.mood-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mood-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+/* ---- Sonic DNA: playable track list ---- */
+.track-list {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 12px 8px 8px;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.track-row:hover:not(:disabled) { border-color: var(--influence); }
+.track-row:disabled { opacity: 0.45; cursor: default; }
+.track-row.playing { border-color: var(--influence); background: var(--panel-2); }
+.track-art {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.track-art img { display: block; width: 44px; height: 44px; object-fit: cover; }
+.track-art-blank { display: block; width: 44px; height: 44px; }
+.track-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.track-row:hover .track-play,
+.track-row.playing .track-play { opacity: 1; }
+.track-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.track-title {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-album {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-eq { margin-left: auto; color: var(--influence); }
