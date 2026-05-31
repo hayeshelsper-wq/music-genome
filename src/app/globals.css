@@ -257,3 +257,62 @@ a:hover { text-decoration: underline; }
   text-overflow: ellipsis;
 }
 .track-eq { margin-left: auto; color: var(--influence); }
+.track-row.selected { border-color: var(--root); }
+
+/* ---- Song X-Ray panel ---- */
+.xray {
+  margin-top: 18px;
+  background: linear-gradient(180deg, var(--panel) 0%, #101018 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+}
+.xray-loading { display: flex; gap: 14px; align-items: center; }
+.xray-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.xray-head h3 { margin: 0; font-size: 18px; }
+.xray-genius { font-size: 13px; }
+.xray-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.xray-stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.xray-stat-value { font-size: 18px; font-weight: 700; line-height: 1.1; text-transform: capitalize; margin-top: 6px; }
+.xray-stat-sub { color: var(--muted); font-size: 12px; margin-top: 4px; text-transform: capitalize; }
+
+.xray-viz { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+@media (max-width: 640px) { .xray-viz { grid-template-columns: 1fr; } }
+.xray-arc-wrap { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.xray-arc {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 90px;
+  margin-top: 8px;
+}
+.xray-bar {
+  flex: 1;
+  background: linear-gradient(180deg, var(--influence), var(--collab));
+  border-radius: 3px 3px 0 0;
+  min-height: 6px;
+}
+.xray-chroma { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.xray-chroma img { width: 100%; border-radius: 8px; margin-top: 8px; display: block; }
+
+.xray-breakdown { margin-top: 18px; line-height: 1.6; }
+.xray-breakdown p { margin: 0; }
+.xray-model { font-size: 12px; margin-top: 8px; font-style: italic; }
+
+.xray-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+@media (max-width: 640px) { .xray-foot { grid-template-columns: 1fr; } }
+.xray-lyric {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--text);
+  border-left: 2px solid var(--root);
+  padding: 4px 0 4px 10px;
+  margin-top: 6px;
+}
+.xray-credits div { font-size: 13px; margin-top: 6px; }
+.xray-credits .stat-label { display: inline; margin-right: 6px; }

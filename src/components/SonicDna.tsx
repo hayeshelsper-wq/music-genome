@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import SongXray from "./SongXray";
 
 interface TopTrack {
   title: string;
@@ -34,6 +35,8 @@ export default function SonicDna({
   const [profile, setProfile] = useState<AudioProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [selected, setSelected] = useState<TopTrack | null>(null);
+  const [artistName, setArtistName] = useState<string>(name || "");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -41,6 +44,7 @@ export default function SonicDna({
     setTracks(null);
     setProfile(null);
     setError(null);
+    setSelected(null);
 
     // Fast path: previews + artwork render as soon as iTunes responds.
     (async () => {
@@ -53,7 +57,10 @@ export default function SonicDna({
         if (!res.ok) throw new Error(json.error || "failed");
         if (alive) {
           setTracks(json.topTracks || []);
-          if (json.artist?.name) onName?.(json.artist.name);
+          if (json.artist?.name) {
+            setArtistName(json.artist.name);
+            onName?.(json.artist.name);
+          }
         }
       } catch (e: any) {
         if (alive) setError(e.message);
@@ -184,36 +191,57 @@ export default function SonicDna({
 
       {/* ---- playable top tracks ---- */}
       {tracks.length > 0 && (
-        <div className="track-list">
-          {tracks.map((t) => {
-            const isPlaying = playing === t.previewUrl;
-            return (
-              <button
-                key={`${t.title}-${t.album}`}
-                className={`track-row${isPlaying ? " playing" : ""}`}
-                onClick={() => toggle(t)}
-                disabled={!t.previewUrl}
-              >
-                <span className="track-art">
-                  {t.artworkUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.artworkUrl} alt="" width={44} height={44} />
-                  ) : (
-                    <span className="track-art-blank" />
-                  )}
-                  <span className="track-play">{isPlaying ? "❚❚" : "▶"}</span>
-                </span>
-                <span className="track-meta">
-                  <span className="track-title">{t.title}</span>
-                  <span className="track-album">
-                    {[t.album, t.releaseYear].filter(Boolean).join(" · ")}
+        <>
+          <p className="hint" style={{ marginTop: 16 }}>
+            Click a track to play it and X-ray it — key, tempo, arrangement,
+            lyrics & a producer breakdown.
+          </p>
+          <div className="track-list">
+            {tracks.map((t) => {
+              const isPlaying = playing === t.previewUrl;
+              const isSelected = selected?.previewUrl === t.previewUrl;
+              return (
+                <button
+                  key={`${t.title}-${t.album}`}
+                  className={`track-row${isPlaying ? " playing" : ""}${
+                    isSelected ? " selected" : ""
+                  }`}
+                  onClick={() => {
+                    toggle(t);
+                    if (t.previewUrl) setSelected(t);
+                  }}
+                  disabled={!t.previewUrl}
+                >
+                  <span className="track-art">
+                    {t.artworkUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.artworkUrl} alt="" width={44} height={44} />
+                    ) : (
+                      <span className="track-art-blank" />
+                    )}
+                    <span className="track-play">{isPlaying ? "❚❚" : "▶"}</span>
                   </span>
-                </span>
-                {isPlaying && <span className="track-eq">♪</span>}
-              </button>
-            );
-          })}
-        </div>
+                  <span className="track-meta">
+                    <span className="track-title">{t.title}</span>
+                    <span className="track-album">
+                      {[t.album, t.releaseYear].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                  {isPlaying && <span className="track-eq">♪</span>}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ---- per-song deep analysis ---- */}
+      {selected?.previewUrl && (
+        <SongXray
+          previewUrl={selected.previewUrl}
+          title={selected.title}
+          artist={artistName}
+        />
       )}
     </div>
   );
