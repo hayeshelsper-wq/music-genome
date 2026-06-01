@@ -5,6 +5,8 @@
 // metadata-only (and the Whisper transcript) if the token is missing or the page
 // shape changes.
 
+import { parse } from "node-html-parser";
+
 const API = "https://api.genius.com";
 
 export interface SongMeta {
@@ -72,29 +74,40 @@ export async function getSongMeta(
   };
 }
 
-/** Best-effort scrape of the lyric text from a Genius song page. */
+/**
+ * Best-effort scrape of the FULL lyric text from a Genius song page. Uses a real
+ * HTML parser (the lyrics live in nested <div data-lyrics-container> blocks that
+ * regex truncates), converts <br> to newlines, and strips Genius's leading
+ * "contributors / translations / description … Read More" preamble.
+ */
 export async function getLyrics(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (MusicGenomeProject)" },
     });
     if (!res.ok) return null;
-    const html = await res.text();
-    // Lyrics live in one or more <div data-lyrics-container="true"> ... </div>.
-    const blocks = [...html.matchAll(/data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/g)];
-    if (blocks.length === 0) return null;
-    const text = blocks
-      .map((m) => m[1])
-      .join("\n")
-      .replace(/<br\s*\/?>(?=)/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&amp;/g, "&")
-      .replace(/&#x27;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/&gt;/g, ">")
-      .replace(/&lt;/g, "<")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    const root = parse(await res.text());
+    const containers = root.querySelectorAll('[data-lyrics-container="true"]');
+    if (containers.length === 0) return null;
+
+    let text = containers
+      .map((c) => {
+        c.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+        return c.text;
+      })
+      .join("\n");
+
+    // The lyrics proper begin at the first section tag ([Verse]/[Chorus]/…);
+    // everything before it is Genius's header/description preamble.
+    const section = text.match(
+      /\[(Verse|Chorus|Intro|Outro|Bridge|Pre-?Chorus|Post-?Chorus|Hook|Refrain|Interlude|Instrumental|Breakdown)\b/i
+    );
+    if (section && section.index !== undefined) {
+      text = text.slice(section.index);
+    } else {
+      text = text.replace(/^[\s\S]*?\bLyrics\b\s*/, "");
+    }
+    text = text.replace(/\n{3,}/g, "\n\n").trim();
     return text.length > 20 ? text : null;
   } catch {
     return null;

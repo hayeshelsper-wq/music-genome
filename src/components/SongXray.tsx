@@ -26,6 +26,7 @@ interface Analysis {
     writers: string[];
   } | null;
   flamingo: string;
+  fullLyrics: string;
   notableLyrics: string[];
   lyricsSource: string;
   breakdown: string;
@@ -196,8 +197,29 @@ export default function SongXray({
           </div>
         )}
       </div>
+
+      {/* full lyrics (accurate, whole-song, from Genius) */}
+      {data.fullLyrics && (
+        <div className="xray-lyricsheet">
+          <div className="xray-lyricsheet-head">
+            <span className="stat-label">Lyrics</span>
+            <span className="muted" style={{ fontSize: 11 }}>full song · Genius</span>
+          </div>
+          <div className="xray-lyricsheet-body">{renderLyrics(data.fullLyrics)}</div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Render Genius lyrics: [Section] tags become labels, blank lines become gaps.
+function renderLyrics(text: string) {
+  return text.split("\n").map((line, i) => {
+    const t = line.trim();
+    if (!t) return <div key={i} className="ly-gap" />;
+    if (/^\[.*\]$/.test(t)) return <div key={i} className="ly-section">{t.replace(/^\[|\]$/g, "")}</div>;
+    return <div key={i} className="ly-line">{t}</div>;
+  });
 }
 
 function Stat({

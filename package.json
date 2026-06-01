@@ -12,6 +12,7 @@
   "dependencies": {
     "neo4j-driver": "^5.28.1",
     "next": "^15.1.6",
+    "node-html-parser": "^7.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-force-graph-2d": "^1.27.0"

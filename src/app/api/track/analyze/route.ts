@@ -32,6 +32,7 @@ interface TrackAnalysis {
   whisper: { text: string };
   genius: SongMeta | null;
   flamingo: string;
+  fullLyrics: string;
   notableLyrics: string[];
   lyricsSource: "genius" | "whisper" | "none";
   breakdown: string;
@@ -163,6 +164,7 @@ export async function GET(req: NextRequest) {
       whisper: { text: audio.lyrics?.text || "" },
       genius: meta,
       flamingo,
+      fullLyrics: lyrics || "", // accurate full lyrics from Genius (whole song)
       notableLyrics,
       lyricsSource: notableLyrics.length ? lyricsSource : "none",
       breakdown,

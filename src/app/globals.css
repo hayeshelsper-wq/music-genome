@@ -343,3 +343,34 @@ a:hover { text-decoration: underline; }
 }
 .xray-credits div { font-size: 13px; margin-top: 6px; }
 .xray-credits .stat-label { display: inline; margin-right: 6px; }
+
+/* full lyric sheet */
+.xray-lyricsheet {
+  margin-top: 18px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.xray-lyricsheet-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.xray-lyricsheet-body {
+  max-height: 340px;
+  overflow-y: auto;
+  columns: 2;
+  column-gap: 32px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+@media (max-width: 600px) { .xray-lyricsheet-body { columns: 1; } }
+.ly-section {
+  break-inside: avoid;
+  color: var(--root);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 12px 0 4px;
+  font-weight: 700;
+}
+.ly-section:first-child { margin-top: 0; }
+.ly-line { color: var(--text); break-inside: avoid; }
+.ly-gap { height: 8px; }
