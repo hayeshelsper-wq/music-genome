@@ -300,8 +300,35 @@ a:hover { text-decoration: underline; }
 .xray-chroma { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
 .xray-chroma img { width: 100%; border-radius: 8px; margin-top: 8px; display: block; }
 
-.xray-breakdown { margin-top: 18px; line-height: 1.6; }
-.xray-breakdown p { margin: 0; }
+.xray-flamingo {
+  margin-top: 18px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.xray-flamingo summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.xray-flamingo summary span { font-weight: 400; }
+.xray-flamingo-body {
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.xray-breakdown {
+  margin-top: 18px;
+  line-height: 1.6;
+  background: linear-gradient(180deg, rgba(255,209,102,0.06), transparent);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--root);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.xray-breakdown p { margin: 8px 0 0; font-size: 15px; }
 .xray-model { font-size: 12px; margin-top: 8px; font-style: italic; }
 
 .xray-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }

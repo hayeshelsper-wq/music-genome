@@ -37,3 +37,20 @@ results are cached per preview after that. The Next app expects it at
 
 If the service isn't running, the rest of the app is unaffected — the Song X-Ray
 panel just shows a "service not running" note.
+
+## Music Flamingo (the "AI listener")
+
+`POST /flamingo {previewUrl}` returns NVIDIA **Music Flamingo**'s musician-level
+read of the clip (genre, chords, instrumentation, structure, production). It's an
+8B audio-LLM that needs an A100/H100, so it can't run locally — `flamingo.py`
+calls NVIDIA's **public HF Space** (which serves it on their GPU) via the raw
+gradio queue API. It's *informed AI opinion*, not ground truth, so the Next app
+feeds it — alongside librosa's measured numbers and Genius metadata — to a
+Grammy-producer-persona LLM that delivers the final critique.
+
+- `MUSIC_FLAMINGO_ENABLED=0` to skip it (critique falls back to librosa-only).
+- `MUSIC_FLAMINGO_URL=...` to point at a self-hosted Modal / HF Inference
+  Endpoint deployment instead of the public Space (more reliable, not rate-limited).
+
+The public Space is a free demo — fine for a personal project, but it can queue,
+rate-limit, or be paused. Results are cached per preview.

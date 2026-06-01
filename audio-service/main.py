@@ -29,8 +29,11 @@ from pydantic import BaseModel
 warnings.filterwarnings("ignore")
 app = FastAPI(title="Music Genome — Audio Analysis")
 
+import flamingo
+
 NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 _cache: dict = {}
+_flamingo_cache: dict = {}
 _whisper = None
 
 
@@ -170,7 +173,26 @@ def chromagram_png(path: str) -> Optional[str]:
 
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "audio-analysis"}
+    return {"ok": True, "service": "audio-analysis", "flamingo": flamingo.ENABLED}
+
+
+@app.post("/flamingo")
+def flamingo_describe(req: AnalyzeReq):
+    """Music Flamingo's musician-level read (slow, GPU-on-a-Space, best-effort)."""
+    if req.previewUrl in _flamingo_cache:
+        return _flamingo_cache[req.previewUrl]
+    path = None
+    try:
+        path = _download(req.previewUrl)
+        result = flamingo.describe(path)
+        if result.get("description"):
+            _flamingo_cache[req.previewUrl] = result
+        return result
+    except Exception as e:  # noqa: BLE001
+        return {"description": "", "error": str(e)[:200]}
+    finally:
+        if path and os.path.exists(path):
+            os.unlink(path)
 
 
 @app.post("/analyze")

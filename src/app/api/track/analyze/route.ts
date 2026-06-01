@@ -31,6 +31,7 @@ interface TrackAnalysis {
   chromagram: string | null;
   whisper: { text: string };
   genius: SongMeta | null;
+  flamingo: string;
   notableLyrics: string[];
   lyricsSource: "genius" | "whisper" | "none";
   breakdown: string;
@@ -41,15 +42,25 @@ interface TrackAnalysis {
 const g = globalThis as unknown as { __trackCache?: Map<string, TrackAnalysis> };
 const cache: Map<string, TrackAnalysis> = g.__trackCache ?? (g.__trackCache = new Map());
 
-const SYSTEM = `You are a record producer and music critic analyzing ONE song.
-You are given DSP measurements of a 30-second preview (already interpreted into
-plain labels), plus song metadata and, when available, the lyric text. Write a
-sharp, specific read that a producer would nod at.
+const SYSTEM = `You are a multi-Grammy-winning songwriter and record producer — think
+the person who has made career-defining records — giving a candid critique of a
+30-second clip of a song. You speak with authority, taste, and specificity: you
+hear arrangement choices, vocal production, harmonic moves, and mix decisions,
+and you have opinions about what works and what you'd push further.
+
+You're given three inputs, in descending order of trust:
+1. MEASURED (librosa DSP) — ground truth for tempo and key. Trust these.
+2. AI LISTENER (Music Flamingo) — a model's rich but fallible read of the audio
+   (chords, instrumentation, structure). Treat as an informed second opinion;
+   defer to MEASURED on tempo/key if they conflict.
+3. METADATA / LYRICS (Genius) — real credits and words.
+
 Rules:
-- Ground every sonic claim in the supplied measurements. Never invent tempo/key.
-- Remember it's only a 30s clip, so speak to "this section" for arrangement.
+- It's only a 30-second clip — critique "this section", not the whole song.
+- Be specific and opinionated, like notes to an artist. No hedging, no preamble.
+- Ground sonic claims; don't invent a tempo/key that contradicts MEASURED.
 - Output EXACTLY this shape, nothing else:
-BREAKDOWN: <~110 words: tonal character, rhythmic feel, arrangement & dynamics>
+CRITIQUE: <~130 words, first person, as the producer: what's working, the harmonic/arrangement/production choices that stand out, and one thing you'd push>
 NOTABLE: <2-3 striking lyric lines, copied VERBATIM from the provided lyrics, separated by " || ">
 If no lyrics are provided, write "NOTABLE: NONE".`;
 
@@ -63,6 +74,21 @@ async function callAudio(previewUrl: string, title: string, artist: string): Pro
   return (await res.json()) as AudioResult;
 }
 
+async function callFlamingo(previewUrl: string): Promise<string> {
+  try {
+    const res = await fetch(`${AUDIO_SERVICE}/flamingo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ previewUrl }),
+    });
+    if (!res.ok) return "";
+    const json = (await res.json()) as { description?: string };
+    return json.description || "";
+  } catch {
+    return ""; // best-effort — the critique still runs on librosa + Genius
+  }
+}
+
 export async function GET(req: NextRequest) {
   const previewUrl = req.nextUrl.searchParams.get("previewUrl");
   const title = req.nextUrl.searchParams.get("title") || "";
@@ -72,9 +98,10 @@ export async function GET(req: NextRequest) {
   if (cache.has(previewUrl)) return NextResponse.json(cache.get(previewUrl));
 
   try {
-    // audio analysis + Genius metadata run concurrently
-    const [audio, meta] = await Promise.all([
+    // librosa analysis + Music Flamingo + Genius metadata all run concurrently
+    const [audio, flamingo, meta] = await Promise.all([
       callAudio(previewUrl, title, artist),
+      callFlamingo(previewUrl),
       getSongMeta(artist, title).catch(() => null),
     ]);
     const lyrics = meta?.url ? await getLyrics(meta.url).catch(() => null) : null;
@@ -107,6 +134,10 @@ export async function GET(req: NextRequest) {
           ].join("\n")
         : "- (audio analysis unavailable)",
       "",
+      flamingo
+        ? `AI LISTENER — Music Flamingo's read of the audio (informed but fallible):\n${flamingo.slice(0, 2500)}`
+        : "",
+      "",
       lyricsForLlm
         ? `Lyrics (${lyricsSource === "whisper" ? "rough auto-transcription, may be wrong" : "from Genius"}):\n${lyricsForLlm.slice(0, 1500)}`
         : "Lyrics: none available.",
@@ -118,7 +149,7 @@ export async function GET(req: NextRequest) {
     const raw = await complete(SYSTEM, facts, llm);
 
     const breakdown = (raw.split(/NOTABLE:/i)[0] || "")
-      .replace(/^BREAKDOWN:/i, "")
+      .replace(/^\s*(CRITIQUE|BREAKDOWN):/i, "")
       .trim();
     const notableRaw = (raw.split(/NOTABLE:/i)[1] || "").trim();
     const notableLyrics =
@@ -131,6 +162,7 @@ export async function GET(req: NextRequest) {
       chromagram: audio.chromagram,
       whisper: { text: audio.lyrics?.text || "" },
       genius: meta,
+      flamingo,
       notableLyrics,
       lyricsSource: notableLyrics.length ? lyricsSource : "none",
       breakdown,

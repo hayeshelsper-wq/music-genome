@@ -25,6 +25,7 @@ interface Analysis {
     producers: string[];
     writers: string[];
   } | null;
+  flamingo: string;
   notableLyrics: string[];
   lyricsSource: string;
   breakdown: string;
@@ -87,8 +88,8 @@ export default function SongXray({
           <div>
             <strong>X-raying “{title}”…</strong>
             <div className="muted" style={{ fontSize: 13 }}>
-              decoding audio → librosa feature extraction → Whisper + Genius →
-              producer breakdown. First run ~20–30s, then instant.
+              librosa measurement → Music Flamingo (NVIDIA audio-LLM on GPU) →
+              Genius → a Grammy-producer critique. First run ~30–60s, then instant.
             </div>
           </div>
         </div>
@@ -149,11 +150,25 @@ export default function SongXray({
         )}
       </div>
 
-      {/* LLM breakdown */}
+      {/* Music Flamingo — AI listener's musician read */}
+      {data.flamingo && (
+        <details className="xray-flamingo">
+          <summary>
+            🦩 Music Flamingo heard this <span className="muted">(NVIDIA audio-LLM — informed but fallible)</span>
+          </summary>
+          <div className="xray-flamingo-body">{data.flamingo}</div>
+        </details>
+      )}
+
+      {/* The producer's critique (LLM, grounded in measurements + Flamingo) */}
       {data.breakdown && (
         <div className="xray-breakdown">
+          <div className="stat-label">🎙️ The Producer’s Critique</div>
           <p>{data.breakdown}</p>
-          <div className="xray-model muted">analysis by {data.model}</div>
+          <div className="xray-model muted">
+            critique by {data.model}
+            {data.flamingo ? " · informed by Music Flamingo + librosa" : " · from librosa measurements"}
+          </div>
         </div>
       )}
 
