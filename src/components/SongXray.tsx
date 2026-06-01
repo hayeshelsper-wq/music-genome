@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import StemLab from "./StemLab";
 
 interface Features {
   tempo_bpm: number;
@@ -45,11 +46,13 @@ export default function SongXray({
 }) {
   const [data, setData] = useState<Analysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showStems, setShowStems] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setData(null);
     setError(null);
+    setShowStems(false);
     (async () => {
       try {
         const url = `/api/track/analyze?previewUrl=${encodeURIComponent(
@@ -208,6 +211,17 @@ export default function SongXray({
           <div className="xray-lyricsheet-body">{renderLyrics(data.fullLyrics)}</div>
         </div>
       )}
+
+      {/* Stem Lab (Demucs) — opt-in, it's GPU-heavy */}
+      <div style={{ marginTop: 18 }}>
+        {!showStems ? (
+          <button className="btn" onClick={() => setShowStems(true)}>
+            🎛️ Separate stems (Demucs) — solo vocals/drums/bass, melody & groove
+          </button>
+        ) : (
+          <StemLab previewUrl={previewUrl} title={title} artist={artist} />
+        )}
+      </div>
     </div>
   );
 }

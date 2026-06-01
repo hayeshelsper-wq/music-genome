@@ -24,10 +24,19 @@ from typing import Optional
 import librosa
 import numpy as np
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+import stems as stemlib
 
 warnings.filterwarnings("ignore")
 app = FastAPI(title="Music Genome — Audio Analysis")
+# The browser plays stem files directly from this service (port 8000).
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
+app.mount("/stemfiles", StaticFiles(directory=stemlib.STEM_DIR), name="stemfiles")
 
 import flamingo
 
@@ -174,6 +183,50 @@ def chromagram_png(path: str) -> Optional[str]:
 @app.get("/health")
 def health():
     return {"ok": True, "service": "audio-analysis", "flamingo": flamingo.ENABLED}
+
+
+_stems_cache: dict = {}
+
+
+def transcribe_timed(path: str) -> list:
+    """Whisper on the ISOLATED vocal stem — far more accurate than on the mix —
+    with segment timestamps, for karaoke-style line highlighting."""
+    try:
+        model = whisper_model()
+        segments, _ = model.transcribe(path, beam_size=1, vad_filter=False)
+        return [
+            {"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text.strip()}
+            for s in segments
+            if s.text.strip()
+        ]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+@app.post("/stems")
+def separate_stems(req: AnalyzeReq):
+    """Demucs stem separation + per-stem analysis + karaoke timing."""
+    key = stemlib.key_for(req.previewUrl)
+    if key in _stems_cache and os.path.exists(os.path.join(stemlib.STEM_DIR, key, "vocals.wav")):
+        return _stems_cache[key]
+    path = None
+    try:
+        path = _download(req.previewUrl)
+        sources, sr = stemlib.separate(path)
+        urls = stemlib.save_stems(sources, sr, key)
+        result = {
+            "stems": urls,
+            "melody": stemlib.vocal_melody(sources["vocals"], sr),
+            "groove": stemlib.drum_groove(sources["drums"], sr),
+            "karaoke": transcribe_timed(os.path.join(stemlib.STEM_DIR, key, "vocals.wav")),
+        }
+        _stems_cache[key] = result
+        return result
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:200], "stems": {}}
+    finally:
+        if path and os.path.exists(path):
+            os.unlink(path)
 
 
 @app.post("/flamingo")

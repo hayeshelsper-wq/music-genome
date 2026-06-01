@@ -54,3 +54,19 @@ Grammy-producer-persona LLM that delivers the final critique.
 
 The public Space is a free demo — fine for a personal project, but it can queue,
 rate-limit, or be paused. Results are cached per preview.
+
+## Stem Lab (Demucs source separation)
+
+`POST /stems {previewUrl}` runs **Demucs** (htdemucs) to split the clip into
+vocals / drums / bass / other, writes them to a temp dir served at `/stemfiles`,
+and returns analysis of the *isolated* stems:
+
+- **Vocal melody** — `librosa.pyin` on the isolated vocal (reliable monophonic
+  pitch tracking, which fails on a full mix): contour + dominant notes.
+- **Drum groove** — tempo + onset pattern of the isolated drum stem.
+- **Karaoke** — Whisper on the isolated vocal for *timing* (the Next app swaps in
+  accurate Genius lines for the *text*, since ASR still mishears singing).
+
+Runs on Apple-GPU (MPS) in ~8s for a 30s clip (CPU fallback). The browser plays
+the four stem files in sync for solo/mute. First call downloads the htdemucs
+model (~80MB).
