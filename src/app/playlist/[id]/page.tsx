@@ -29,6 +29,7 @@ export default function PlaylistPage() {
   const [error, setError] = useState<string | null>(null);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cardsRef = useRef<Map<number, TrackCard>>(new Map());
   const rgb = useVibrantColor(pl?.image);
@@ -231,9 +232,16 @@ export default function PlaylistPage() {
         </div>
 
         {notes && (
-          <div className="pl-linernotes">
-            <div className="stat-label">📝 Liner Notes</div>
-            <p>{notes}</p>
+          <div className={`pl-linernotes ${notesOpen ? "open" : ""}`}>
+            <button
+              className="pl-notes-toggle"
+              onClick={() => setNotesOpen((o) => !o)}
+              aria-expanded={notesOpen}
+            >
+              <span className="stat-label">📝 Liner Notes</span>
+              <span className="pl-notes-chevron">▾</span>
+            </button>
+            {notesOpen && <p>{notes}</p>}
           </div>
         )}
 

@@ -356,9 +356,17 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-left: 3px solid rgb(var(--hero-rgb, 120 120 120));
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 11px 16px;
 }
-.pl-linernotes p { margin: 6px 0 0; font-size: 15px; }
+.pl-linernotes p { margin: 10px 0 2px; font-size: 15px; }
+/* Collapsible header: a slim clickable bar that expands the notes on demand. */
+.pl-notes-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; text-align: left; font: inherit;
+}
+.pl-notes-chevron { color: var(--muted); font-size: 12px; transition: transform 0.18s; }
+.pl-linernotes.open .pl-notes-chevron { transform: rotate(180deg); }
 
 /* estimated chord progression */
 /* discriminative tagger chips (instruments / genre / mood / vocal) */
