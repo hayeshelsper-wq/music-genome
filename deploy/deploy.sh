@@ -87,6 +87,19 @@ echo "▸ allowing audio-service → flamingo…"
 gcloud run services add-iam-policy-binding flamingo --region="$REGION" --quiet \
   --member="serviceAccount:${RUN_SA}" --role=roles/run.invoker >/dev/null
 
+echo "▸ deploying musicgen (L4 GPU, private, scale-to-zero)…"
+# The generative half of the Genome Studio (/studio): MusicGen on an L4. Private
+# (IAM-gated); the web app calls it with a Google-signed ID token. Scales to zero.
+gcloud run deploy musicgen \
+  --image="$AR/musicgen:$TAG" --region="$REGION" \
+  --gpu=1 --gpu-type=nvidia-l4 --no-gpu-zonal-redundancy \
+  --cpu=8 --memory=24Gi --concurrency=1 \
+  --min-instances=0 --max-instances=1 --timeout=300 \
+  --no-allow-unauthenticated \
+  --service-account="$RUN_SA" \
+  --set-env-vars=MUSICGEN_DEVICE=cuda
+MUSICGEN_URL="$(gcloud run services describe musicgen --region="$REGION" --format='value(status.url)')"
+
 echo "▸ deploying web (public)…"
 # timeout=600: "Ask the Genome" (/api/ask) streams an agentic loop that can chain
 # several tool calls and, worst case, ingest a never-seen artist mid-turn
@@ -97,12 +110,14 @@ gcloud run deploy web \
   --cpu=1 --memory=1Gi --min-instances=0 --max-instances=4 --timeout=600 \
   --allow-unauthenticated \
   --service-account="$RUN_SA" \
-  --set-env-vars=AUDIO_SERVICE_URL="$AUDIO_URL",GOOGLE_CLOUD_PROJECT="$PROJECT",LLM_PROVIDER=anthropic,ANTHROPIC_MODEL=claude-opus-4-8,MUSICBRAINZ_USER_AGENT="MusicGenome/1.0 ( hayeshelsper@gmail.com )" \
+  --set-env-vars=AUDIO_SERVICE_URL="$AUDIO_URL",MUSICGEN_URL="$MUSICGEN_URL",GOOGLE_CLOUD_PROJECT="$PROJECT",LLM_PROVIDER=anthropic,ANTHROPIC_MODEL=claude-opus-4-8,MUSICBRAINZ_USER_AGENT="MusicGenome/1.0 ( hayeshelsper@gmail.com )" \
   --set-secrets=SPOTIFY_CLIENT_ID=SPOTIFY_CLIENT_ID:latest,SPOTIFY_CLIENT_SECRET=SPOTIFY_CLIENT_SECRET:latest,LASTFM_API_KEY=LASTFM_API_KEY:latest,GENIUS_ACCESS_TOKEN=GENIUS_ACCESS_TOKEN:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,AUTH_PASSWORD=AUTH_PASSWORD:latest,AUTH_SECRET=AUTH_SECRET:latest
 WEB_URL="$(gcloud run services describe web --region="$REGION" --format='value(status.url)')"
 
-echo "▸ allowing web → audio-service + setting Spotify redirect…"
+echo "▸ allowing web → audio-service + musicgen, setting Spotify redirect…"
 gcloud run services add-iam-policy-binding audio-service --region="$REGION" --quiet \
+  --member="serviceAccount:${RUN_SA}" --role=roles/run.invoker >/dev/null
+gcloud run services add-iam-policy-binding musicgen --region="$REGION" --quiet \
   --member="serviceAccount:${RUN_SA}" --role=roles/run.invoker >/dev/null
 gcloud run services update web --region="$REGION" \
   --update-env-vars=SPOTIFY_REDIRECT_URI="${WEB_URL}/api/spotify/callback" >/dev/null

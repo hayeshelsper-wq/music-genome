@@ -79,6 +79,9 @@ export default function Home() {
           <Link className="btn-ask" href="/ask">
             💬 Ask the Genome — research anything with an AI music agent →
           </Link>
+          <Link className="btn-studio" href="/studio">
+            🧬 The Genome Studio — generate music from DNA, then score it →
+          </Link>
           <span className="home-or" style={{ marginTop: 14 }}>
             or decode your own playlist
           </span>

@@ -1,0 +1,23 @@
+# Builds the MusicGen GPU image (CUDA base + baked-in weights). Big image, so a
+# roomy disk + high-CPU builder, like the flamingo build.
+substitutions:
+  _AR: ""        # e.g. us-central1-docker.pkg.dev/PROJECT/music-genome
+  _TAG: "latest"
+  _MODEL: "facebook/musicgen-small"
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - "build"
+      - "-t"
+      - "${_AR}/musicgen:${_TAG}"
+      - "-f"
+      - "musicgen-service/Dockerfile"
+      - "--build-arg"
+      - "MUSICGEN_MODEL=${_MODEL}"
+      - "musicgen-service"
+images:
+  - "${_AR}/musicgen:${_TAG}"
+options:
+  diskSizeGb: 120
+  machineType: E2_HIGHCPU_8
+timeout: 3600s
