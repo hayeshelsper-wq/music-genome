@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import SongXray from "./SongXray";
 
 interface TopTrack {
@@ -201,47 +201,52 @@ export default function SonicDna({
               const isPlaying = playing === t.previewUrl;
               const isSelected = selected?.previewUrl === t.previewUrl;
               return (
-                <button
-                  key={`${t.title}-${t.album}`}
-                  className={`track-row${isPlaying ? " playing" : ""}${
-                    isSelected ? " selected" : ""
-                  }`}
-                  onClick={() => {
-                    toggle(t);
-                    if (t.previewUrl) setSelected(t);
-                  }}
-                  disabled={!t.previewUrl}
-                >
-                  <span className="track-art">
-                    {t.artworkUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={t.artworkUrl} alt="" width={44} height={44} />
-                    ) : (
-                      <span className="track-art-blank" />
-                    )}
-                    <span className="track-play">{isPlaying ? "❚❚" : "▶"}</span>
-                  </span>
-                  <span className="track-meta">
-                    <span className="track-title">{t.title}</span>
-                    <span className="track-album">
-                      {[t.album, t.releaseYear].filter(Boolean).join(" · ")}
+                <Fragment key={`${t.title}-${t.album}`}>
+                  <button
+                    className={`track-row${isPlaying ? " playing" : ""}${
+                      isSelected ? " selected" : ""
+                    }`}
+                    onClick={() => {
+                      toggle(t);
+                      if (t.previewUrl) setSelected(t);
+                    }}
+                    disabled={!t.previewUrl}
+                  >
+                    <span className="track-art">
+                      {t.artworkUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={t.artworkUrl} alt="" width={44} height={44} />
+                      ) : (
+                        <span className="track-art-blank" />
+                      )}
+                      <span className="track-play">{isPlaying ? "❚❚" : "▶"}</span>
                     </span>
-                  </span>
-                  {isPlaying && <span className="track-eq">♪</span>}
-                </button>
+                    <span className="track-meta">
+                      <span className="track-title">{t.title}</span>
+                      <span className="track-album">
+                        {[t.album, t.releaseYear].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                    {isPlaying && <span className="track-eq">♪</span>}
+                  </button>
+
+                  {/* Per-song X-ray: rendered inside the grid (full-width) right
+                      after the tapped track. On mobile that's directly below it;
+                      on desktop CSS `order` pushes it to the bottom of the grid. */}
+                  {isSelected && t.previewUrl && (
+                    <div className="sonic-xray">
+                      <SongXray
+                        previewUrl={t.previewUrl}
+                        title={t.title}
+                        artist={artistName}
+                      />
+                    </div>
+                  )}
+                </Fragment>
               );
             })}
           </div>
         </>
-      )}
-
-      {/* ---- per-song deep analysis ---- */}
-      {selected?.previewUrl && (
-        <SongXray
-          previewUrl={selected.previewUrl}
-          title={selected.title}
-          artist={artistName}
-        />
       )}
     </div>
   );

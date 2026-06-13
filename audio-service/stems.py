@@ -69,6 +69,66 @@ def save_stems(stems: dict, sr: int, key: str) -> dict:
     return urls
 
 
+def _note_name(hz: float) -> str:
+    m = int(round(12 * np.log2(hz / 440) + 69))
+    return NOTES[m % 12] + str(m // 12 - 1)
+
+
+def _vibrato(f0: np.ndarray, sr: int, hop: int = 512):
+    """Estimate vibrato as a periodic wobble on the pitch line: detrend the pitch
+    (in cents) and read off its modulation rate (Hz) and extent (cents)."""
+    idx = np.arange(len(f0))
+    good = ~np.isnan(f0) & (f0 > 0)
+    if good.sum() < 20:
+        return None, None
+    v = np.interp(idx, idx[good], f0[good])
+    cents = 1200 * np.log2(v / np.median(f0[good]))
+    frame_rate = sr / hop
+    win = max(3, int(0.25 * frame_rate))
+    trend = np.convolve(cents, np.ones(win) / win, mode="same")
+    osc = cents - trend
+    extent = float(np.std(osc))
+    crossings = np.sum(np.abs(np.diff(np.sign(osc)))) / 2
+    dur = len(osc) / frame_rate
+    rate = round((crossings / dur) / 2, 1) if dur > 0 else None
+    return rate, round(extent)
+
+
+def _vocal_fingerprint(f0: np.ndarray, mono: np.ndarray, sr: int):
+    """A compact 'voiceprint': range, register, vibrato and breathiness from the
+    isolated vocal. Best-effort — Demucs leakage and ASR-grade pitch make it
+    approximate, but it captures the gist of a delivery."""
+    voiced = f0[~np.isnan(f0)]
+    voiced = voiced[voiced > 0]
+    if voiced.size < 15:
+        return None
+    lo, hi, med = (
+        float(np.percentile(voiced, 5)),
+        float(np.percentile(voiced, 95)),
+        float(np.median(voiced)),
+    )
+    register = "low / chesty" if med < 200 else "mid-range" if med < 350 else "high / heady"
+    rate, extent = _vibrato(f0, sr)
+    if extent is None or extent < 18:
+        vibrato = "straight tone (little vibrato)"
+    elif rate and 4 <= rate <= 8:
+        vibrato = f"~{rate} Hz vibrato"
+    elif rate:
+        vibrato = f"~{rate} Hz pitch movement"
+    else:
+        vibrato = "some vibrato"
+    flat = float(np.mean(librosa.feature.spectral_flatness(y=mono)))
+    breathiness = "clear / resonant" if flat < 0.02 else "some air" if flat < 0.05 else "breathy / airy"
+    return {
+        "rangeLow": _note_name(lo),
+        "rangeHigh": _note_name(hi),
+        "rangeSemitones": round(12 * np.log2(hi / lo)),
+        "register": register,
+        "vibrato": vibrato,
+        "breathiness": breathiness,
+    }
+
+
 def vocal_melody(vocal: np.ndarray, sr: int) -> dict:
     """Pitch contour of the isolated vocal — pyin is reliable here (monophonic)."""
     mono = vocal.mean(0)
@@ -85,7 +145,12 @@ def vocal_melody(vocal: np.ndarray, sr: int) -> dict:
             notes[n] = notes.get(n, 0) + 1
     top = [n for n, _ in sorted(notes.items(), key=lambda x: -x[1])[:5]]
     voiced = float(np.mean(~np.isnan(f0)))
-    return {"contour": contour, "topNotes": top, "voicedFraction": round(voiced, 2)}
+    return {
+        "contour": contour,
+        "topNotes": top,
+        "voicedFraction": round(voiced, 2),
+        "fingerprint": _vocal_fingerprint(f0, mono, sr),
+    }
 
 
 def drum_groove(drums: np.ndarray, sr: int) -> dict:

@@ -1,0 +1,20 @@
+# Rebuilds ONLY the audio-service code layer on top of an existing audio image.
+substitutions:
+  _AR: ""
+  _BASETAG: ""
+  _TAG: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "-t",
+        "${_AR}/audio:${_TAG}",
+        "-f",
+        "audio-service/Dockerfile.audio-overlay",
+        "--build-arg",
+        "BASE=${_AR}/audio:${_BASETAG}",
+        "audio-service",
+      ]
+images:
+  - "${_AR}/audio:${_TAG}"

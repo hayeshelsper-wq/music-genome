@@ -140,6 +140,44 @@ export async function getArtistRecordings(
   return out;
 }
 
+interface MbIsrcLookup {
+  recordings?: Array<{
+    id: string;
+    title: string;
+    "artist-credit"?: Array<{ artist?: { id: string; name: string } }>;
+  }>;
+}
+
+/**
+ * THE BRIDGE: resolve a Spotify track's ISRC to a MusicBrainz recording (+ its
+ * primary artist). This is the join that lets the entire MBID-keyed enrichment
+ * engine run on a playlist Spotify handed us. ISRC is a globally unique recording
+ * code Spotify still returns, so this is an exact match, not fuzzy name guessing.
+ */
+export async function lookupIsrc(isrc: string): Promise<{
+  recordingMbid: string;
+  title: string;
+  artistMbid?: string;
+  artistName?: string;
+} | null> {
+  try {
+    const d = await mb<MbIsrcLookup>(`/isrc/${encodeURIComponent(isrc)}`, {
+      inc: "artist-credits",
+    });
+    const rec = d.recordings?.[0];
+    if (!rec?.id) return null;
+    const artist = rec["artist-credit"]?.[0]?.artist;
+    return {
+      recordingMbid: rec.id,
+      title: rec.title,
+      artistMbid: artist?.id,
+      artistName: artist?.name,
+    };
+  } catch {
+    return null; // not in MusicBrainz — caller falls back to name/title matching
+  }
+}
+
 export interface ReleaseGroup {
   title: string;
   year?: number;

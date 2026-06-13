@@ -2,6 +2,28 @@ import neo4j, { Driver, Session } from "neo4j-driver";
 
 let driver: Driver | null = null;
 
+/** Whether NEO4J_* env is present — lets callers tell "not configured" apart from
+ *  "configured but unreachable" (e.g. a paused Aura Free instance). */
+export function isNeo4jConfigured(): boolean {
+  return !!(
+    process.env.NEO4J_URI &&
+    process.env.NEO4J_USER &&
+    process.env.NEO4J_PASSWORD
+  );
+}
+
+/** Transient connectivity errors — typically a cold/paused Aura instance resuming
+ *  or a dropped pooled connection. These are worth retrying. */
+export function isTransientNeo4jError(e: unknown): boolean {
+  const m =
+    (e as { code?: string })?.code +
+    " " +
+    ((e as { message?: string })?.message || String(e));
+  return /ServiceUnavailable|SessionExpired|TransientError|routing|Unable to (connect|acquire)|acquisition timed out|ECONNREFUSED|ECONNRESET|Connection (acquisition|was closed)/i.test(
+    m
+  );
+}
+
 export function getDriver(): Driver {
   if (driver) return driver;
   const uri = process.env.NEO4J_URI;
@@ -16,16 +38,29 @@ export function getDriver(): Driver {
     // Keep connections lean; the graph is small per-artist.
     maxConnectionPoolSize: 20,
     disableLosslessIntegers: true, // return plain JS numbers, not Integer
+    // Aura Free pauses when idle; give a resuming instance time to answer.
+    connectionAcquisitionTimeout: 60_000,
   });
   return driver;
 }
 
-export async function withSession<T>(fn: (s: Session) => Promise<T>): Promise<T> {
-  const session = getDriver().session();
-  try {
-    return await fn(session);
-  } finally {
-    await session.close();
+export async function withSession<T>(
+  fn: (s: Session) => Promise<T>,
+  retries = 2
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const session = getDriver().session();
+    try {
+      return await fn(session);
+    } catch (e) {
+      if (attempt < retries && isTransientNeo4jError(e)) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        continue;
+      }
+      throw e;
+    } finally {
+      await session.close();
+    }
   }
 }
 

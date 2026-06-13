@@ -1,0 +1,17 @@
+# Builds ONLY the audio-service (CPU DSP: librosa/demucs/whisper) image — fast iteration.
+substitutions:
+  _AR: ""
+  _TAG: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "-t",
+        "${_AR}/audio:${_TAG}",
+        "-f",
+        "audio-service/Dockerfile",
+        "audio-service",
+      ]
+images:
+  - "${_AR}/audio:${_TAG}"

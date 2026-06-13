@@ -1,0 +1,33 @@
+# ---- Audio Flamingo 3 (8B) → Cloud Run + NVIDIA L4 GPU ----
+# Build context is the audio-service/ directory (shares flamingo_local_server.py).
+# A real CUDA GPU runs this in full bf16 with no Metal bugs — seconds per clip.
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ffmpeg libsndfile1 git \
+    && rm -rf /var/lib/apt/lists/*
+
+# AF3's HF class lives on transformers `main` (newer than any release).
+RUN pip install --no-cache-dir \
+      "git+https://github.com/huggingface/transformers" accelerate \
+      fastapi "uvicorn[standard]" soundfile librosa httpx python-multipart pydantic
+
+# ---- model weights: BAKED INTO THE IMAGE ----
+# Cloud Run's writable filesystem is in-memory, so downloading the ~16GB model at
+# runtime to HF_HOME eats all the RAM and OOM-kills the container. Baking it into
+# a read-only image layer means it's read from "disk" (the image), not RAM. The
+# model is public, so no token is needed for the build-time download.
+ENV HF_HOME=/models
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('nvidia/audio-flamingo-3-hf')"
+
+COPY flamingo_local_server.py .
+
+ENV PORT=8080
+ENV MUSIC_FLAMINGO_DEVICE=cuda
+ENV MUSIC_FLAMINGO_DTYPE=bfloat16
+ENV MUSIC_FLAMINGO_MAX_TOKENS=1024
+
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn flamingo_local_server:app --host 0.0.0.0 --port ${PORT:-8080}"]

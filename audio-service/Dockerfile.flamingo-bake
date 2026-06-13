@@ -1,0 +1,6 @@
+# Bake the ~16GB model into the existing (deps + dtype-fixed code) image so cold
+# starts read it from the image instead of re-downloading from HF each time.
+ARG BASE
+FROM ${BASE}
+ENV HF_HOME=/models
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('nvidia/audio-flamingo-3-hf')"

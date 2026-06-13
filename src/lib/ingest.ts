@@ -1,4 +1,4 @@
-import { withSession, ensureConstraints } from "./neo4j";
+import { getReport, saveReport } from "./store";
 import { getArtist, getReleaseGroups, MbRelation, ReleaseGroup } from "./musicbrainz";
 import { getInfluences } from "./wikidata";
 import { similarArtists, topTags } from "./lastfm";
@@ -25,9 +25,18 @@ function buildTimeline(rgs: ReleaseGroup[]): GenrePoint[] {
     .slice(0, 30);
 }
 
-/** Pull from every source and write the graph. Idempotent via MERGE. */
+function dedupeNodes(nodes: GraphNode[]): GraphNode[] {
+  const map = new Map<string, GraphNode>();
+  for (const n of nodes) if (n.id && !map.has(n.id)) map.set(n.id, n);
+  return [...map.values()];
+}
+
+/**
+ * Pull from every source, assemble the full report in memory, and persist it as
+ * one document. Idempotent — re-ingesting just overwrites the doc. (The graphs
+ * are 1-hop, so we build them directly here rather than round-tripping a DB.)
+ */
 export async function ingestArtist(mbid: string): Promise<void> {
-  await ensureConstraints();
   const { ref, relations } = await getArtist(mbid);
   const [releaseGroups, influences] = await Promise.all([
     getReleaseGroups(mbid),
@@ -39,143 +48,50 @@ export async function ingestArtist(mbid: string): Promise<void> {
   ]);
   const timeline = buildTimeline(releaseGroups);
 
-  const influenceRows = influences.map((i) => ({
-    key: i.mbid || `wd:${i.qid}`,
-    name: i.name,
-    qid: i.qid,
-    dir: i.direction,
-  }));
-
-  const collabRows = (relations || [])
-    .filter((r: MbRelation) => r.artist?.id)
-    .map((r) => {
-      const c = classify(r.type);
-      return { key: r.artist!.id, name: r.artist!.name, kind: c.kind, label: c.label };
-    });
-
-  await withSession(async (s) => {
-    await s.run(
-      `MERGE (a:Artist {mbid:$mbid})
-       SET a.name=$name, a.country=$country, a.type=$type,
-           a.beginYear=$beginYear, a.endYear=$endYear, a.wikidataId=$wikidataId,
-           a.timelineJson=$timelineJson, a.similarJson=$similarJson,
-           a.tagsJson=$tagsJson, a.ingestedAt=timestamp(), a.source='musicbrainz'`,
-      {
-        mbid,
-        name: ref.name,
-        country: ref.country ?? null,
-        type: ref.type ?? null,
-        beginYear: ref.beginYear ?? null,
-        endYear: ref.endYear ?? null,
-        wikidataId: ref.wikidataId ?? null,
-        timelineJson: JSON.stringify(timeline),
-        similarJson: JSON.stringify(similar),
-        tagsJson: JSON.stringify(tags),
-      }
-    );
-
-    if (influenceRows.length) {
-      await s.run(
-        `UNWIND $rows AS row
-         MERGE (o:Artist {mbid: row.key})
-           ON CREATE SET o.name = row.name, o.wikidataId = row.qid, o.source='wikidata'
-           ON MATCH SET o.name = coalesce(o.name, row.name)
-         WITH o, row
-         MATCH (a:Artist {mbid:$root})
-         FOREACH (_ IN CASE WHEN row.dir='influence' THEN [1] ELSE [] END |
-                  MERGE (a)-[:INFLUENCED_BY]->(o))
-         FOREACH (_ IN CASE WHEN row.dir='descendant' THEN [1] ELSE [] END |
-                  MERGE (o)-[:INFLUENCED_BY]->(a))`,
-        { rows: influenceRows, root: mbid }
-      );
+  // ---- family (influence) graph ----
+  const famNodes: GraphNode[] = [{ id: ref.mbid, name: ref.name, group: "root" }];
+  const famLinks: GraphLink[] = [];
+  for (const i of influences) {
+    const id = i.mbid || `wd:${i.qid}`;
+    if (!i.name) continue;
+    if (i.direction === "influence") {
+      famNodes.push({ id, name: i.name, group: "influence" });
+      famLinks.push({ source: ref.mbid, target: id, kind: "INFLUENCED_BY", label: "influenced by" });
+    } else {
+      famNodes.push({ id, name: i.name, group: "descendant" });
+      famLinks.push({ source: id, target: ref.mbid, kind: "INFLUENCED_BY", label: "influenced" });
     }
+  }
 
-    if (collabRows.length) {
-      await s.run(
-        `UNWIND $rows AS row
-         MERGE (o:Artist {mbid: row.key})
-           ON CREATE SET o.name = row.name, o.source='musicbrainz'
-           ON MATCH SET o.name = coalesce(o.name, row.name)
-         WITH o, row
-         MATCH (a:Artist {mbid:$root})
-         MERGE (a)-[r:RELATED {kind: row.kind}]->(o)
-           SET r.label = row.label`,
-        { rows: collabRows, root: mbid }
-      );
-    }
-  });
+  // ---- collaborator graph ----
+  const colNodes: GraphNode[] = [{ id: ref.mbid, name: ref.name, group: "root" }];
+  const colLinks: GraphLink[] = [];
+  const seenCol = new Set<string>();
+  for (const r of (relations || []) as MbRelation[]) {
+    if (!r.artist?.id) continue;
+    const c = classify(r.type);
+    const edgeKey = `${r.artist.id}|${c.kind}`;
+    if (seenCol.has(edgeKey)) continue;
+    seenCol.add(edgeKey);
+    colNodes.push({ id: r.artist.id, name: r.artist.name, group: "collaborator", detail: c.label });
+    colLinks.push({ source: ref.mbid, target: r.artist.id, kind: c.kind, label: c.label });
+  }
+
+  const report: ArtistDnaReport = {
+    artist: ref,
+    family: { nodes: dedupeNodes(famNodes), links: famLinks },
+    collaborators: { nodes: dedupeNodes(colNodes), links: colLinks },
+    similar,
+    tags,
+    timeline,
+  };
+
+  await saveReport(mbid, report);
 }
 
-/** Assemble the report by reading the graph back out. */
+/** Read the assembled report back out of the store. */
 export async function buildReport(mbid: string): Promise<ArtistDnaReport> {
-  return withSession(async (s) => {
-    const root = await s.run(`MATCH (a:Artist {mbid:$mbid}) RETURN a`, { mbid });
-    if (root.records.length === 0) throw new Error("artist not ingested");
-    const a = root.records[0].get("a").properties;
-
-    const inf = await s.run(
-      `MATCH (a:Artist {mbid:$mbid})
-       OPTIONAL MATCH (a)-[:INFLUENCED_BY]->(up:Artist)
-       OPTIONAL MATCH (down:Artist)-[:INFLUENCED_BY]->(a)
-       RETURN
-         collect(DISTINCT {mbid:up.mbid, name:up.name}) AS influences,
-         collect(DISTINCT {mbid:down.mbid, name:down.name}) AS descendants`,
-      { mbid }
-    );
-    const rec = inf.records[0];
-    const influences = (rec.get("influences") || []).filter((x: any) => x.name);
-    const descendants = (rec.get("descendants") || []).filter((x: any) => x.name);
-
-    const col = await s.run(
-      `MATCH (a:Artist {mbid:$mbid})-[r:RELATED]->(o:Artist)
-       RETURN collect({mbid:o.mbid, name:o.name, kind:r.kind, label:r.label}) AS collabs`,
-      { mbid }
-    );
-    const collabs = col.records[0].get("collabs") || [];
-
-    // ---- family tree graph ----
-    const famNodes: GraphNode[] = [
-      { id: a.mbid, name: a.name, group: "root" },
-    ];
-    const famLinks: GraphLink[] = [];
-    for (const x of influences) {
-      famNodes.push({ id: x.mbid, name: x.name, group: "influence" });
-      famLinks.push({ source: a.mbid, target: x.mbid, kind: "INFLUENCED_BY", label: "influenced by" });
-    }
-    for (const x of descendants) {
-      famNodes.push({ id: x.mbid, name: x.name, group: "descendant" });
-      famLinks.push({ source: x.mbid, target: a.mbid, kind: "INFLUENCED_BY", label: "influenced" });
-    }
-
-    // ---- collaborator graph ----
-    const colNodes: GraphNode[] = [{ id: a.mbid, name: a.name, group: "root" }];
-    const colLinks: GraphLink[] = [];
-    for (const c of collabs) {
-      colNodes.push({ id: c.mbid, name: c.name, group: "collaborator", detail: c.label });
-      colLinks.push({ source: a.mbid, target: c.mbid, kind: c.kind, label: c.label });
-    }
-
-    return {
-      artist: {
-        mbid: a.mbid,
-        name: a.name,
-        country: a.country ?? undefined,
-        type: a.type ?? undefined,
-        beginYear: a.beginYear ?? undefined,
-        endYear: a.endYear ?? undefined,
-        wikidataId: a.wikidataId ?? undefined,
-      },
-      family: { nodes: dedupeNodes(famNodes), links: famLinks },
-      collaborators: { nodes: dedupeNodes(colNodes), links: colLinks },
-      similar: JSON.parse(a.similarJson || "[]"),
-      tags: JSON.parse(a.tagsJson || "[]"),
-      timeline: JSON.parse(a.timelineJson || "[]") as GenrePoint[],
-    };
-  });
-}
-
-function dedupeNodes(nodes: GraphNode[]): GraphNode[] {
-  const map = new Map<string, GraphNode>();
-  for (const n of nodes) if (n.id && !map.has(n.id)) map.set(n.id, n);
-  return [...map.values()];
+  const report = await getReport(mbid);
+  if (!report) throw new Error("artist not ingested");
+  return report;
 }

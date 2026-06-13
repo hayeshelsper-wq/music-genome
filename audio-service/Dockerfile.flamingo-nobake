@@ -1,0 +1,26 @@
+# ---- Flamingo GPU server, NO baked model ----
+# Same server as Dockerfile.flamingo but the weights come from a mounted GCS
+# volume (MUSIC_FLAMINGO_MODEL=/models/...), so the image is small + builds fast.
+# Used for the AF-Next captioner A/B (MUSIC_FLAMINGO_ARCH=afnext); also works for
+# AF3 from a mount. Fresh transformers `main` for AF-Next + AF3 model classes.
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ffmpeg libsndfile1 git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+      "git+https://github.com/huggingface/transformers" accelerate \
+      fastapi "uvicorn[standard]" soundfile librosa httpx python-multipart pydantic
+
+COPY flamingo_local_server.py .
+
+ENV PORT=8080
+ENV MUSIC_FLAMINGO_DEVICE=cuda
+ENV MUSIC_FLAMINGO_DTYPE=bfloat16
+ENV MUSIC_FLAMINGO_MAX_TOKENS=1024
+
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn flamingo_local_server:app --host 0.0.0.0 --port ${PORT:-8080}"]

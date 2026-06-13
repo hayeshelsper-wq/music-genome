@@ -1,0 +1,21 @@
+# Rebuilds the flamingo image's CODE layer only, on top of the baked-model base.
+substitutions:
+  _AR: ""
+  _BASETAG: ""
+  _TAG: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - "build"
+      - "-t"
+      - "${_AR}/flamingo:${_TAG}"
+      - "-f"
+      - "audio-service/Dockerfile.flamingo-overlay"
+      - "--build-arg"
+      - "BASE=${_AR}/flamingo:${_BASETAG}"
+      - "audio-service"
+images:
+  - "${_AR}/flamingo:${_TAG}"
+options:
+  diskSizeGb: 100
+timeout: 1800s

@@ -1,0 +1,5 @@
+# Thin overlay: take the already-built flamingo image (with the ~16GB model baked
+# in) and just replace the server code. Avoids re-downloading/re-baking the model.
+ARG BASE
+FROM ${BASE}
+COPY flamingo_local_server.py .

@@ -48,12 +48,49 @@ gradio queue API. It's *informed AI opinion*, not ground truth, so the Next app
 feeds it — alongside librosa's measured numbers and Genius metadata — to a
 Grammy-producer-persona LLM that delivers the final critique.
 
+The public Space is a free demo — fine in theory, but in practice it frequently
+returns `event: error` (ZeroGPU quota / cold start). Prefer running it locally.
+
+### Run Audio Flamingo 3 locally (recommended over the flaky Space)
+
+AF3 is now natively in 🤗 Transformers (`nvidia/audio-flamingo-3-hf`), so it runs
+on this Mac — no dependency on NVIDIA's Space. Its class is newer than any
+transformers release and wants Python 3.10+, so it gets an isolated **3.11 venv**.
+It runs as a small sidecar (`flamingo_local_server.py`, port 8077); `flamingo.py`
+POSTs it a wav path over localhost when `MUSIC_FLAMINGO_LOCAL=1`.
+
+**Storage (split across two drives):**
+- venv → a **proper filesystem** (`MUSIC_FLAMINGO_VENV`, default Pro Tools/HFS+).
+  ExFAT corrupts venvs (non-atomic renames over tens of thousands of files), so
+  it must NOT live on an ExFAT drive.
+- ~16GB model cache → `MUSIC_FLAMINGO_CACHE` (default the external SSD).
+
+**Runtime config (learned the hard way):** it runs on **CPU**, not the GPU —
+torch's MPS/Metal backend hard-asserts on this model's matmuls regardless of
+dtype. To keep memory sane we run the 7B language model in **bfloat16** but force
+the 637M audio encoder to **fp32** (CPU `conv1d` can't do bf16, and the processor
+emits fp32 features); a forward hook casts the encoder output back to bf16. Peak
+RSS ≈ **18GB** (vs ~32GB for full fp32). A 30s clip takes ~1–2 min on CPU; results
+are cached per preview, and the Deep X-ray is opt-in, so that cost is paid once.
+
+```bash
+cd audio-service
+./setup-local-flamingo.sh                 # one-time: 3.11 venv + deps
+./run-local-flamingo.sh                   # leave running (first call pulls ~16GB)
+# then start the main service pointed at the sidecar:
+MUSIC_FLAMINGO_LOCAL=1 uvicorn main:app --port 8000
+```
+
+Knobs: `MUSIC_FLAMINGO_MAX_TOKENS` (default 512; lower = faster), `MUSIC_FLAMINGO_DTYPE`
+(`bfloat16` default / `float32` / `float16`), `MUSIC_FLAMINGO_DEVICE` (`cpu` default;
+set `mps` to retry the GPU once a torch build fixes the Metal asserts). Noncommercial license.
+
+### Other knobs
 - `MUSIC_FLAMINGO_ENABLED=0` to skip it (critique falls back to librosa-only).
 - `MUSIC_FLAMINGO_URL=...` to point at a self-hosted Modal / HF Inference
-  Endpoint deployment instead of the public Space (more reliable, not rate-limited).
+  Endpoint instead of the public Space.
 
-The public Space is a free demo — fine for a personal project, but it can queue,
-rate-limit, or be paused. Results are cached per preview.
+Results are cached per preview.
 
 ## Stem Lab (Demucs source separation)
 

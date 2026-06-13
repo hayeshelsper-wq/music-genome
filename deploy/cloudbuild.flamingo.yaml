@@ -1,0 +1,14 @@
+# Builds ONLY the flamingo GPU image (with the ~16GB model baked in).
+# Needs a big disk for the model download + the ~24GB image.
+substitutions:
+  _AR: ""
+  _TAG: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_AR}/flamingo:${_TAG}", "-f", "audio-service/Dockerfile.flamingo", "audio-service"]
+images:
+  - "${_AR}/flamingo:${_TAG}"
+options:
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: 200
+timeout: 3600s

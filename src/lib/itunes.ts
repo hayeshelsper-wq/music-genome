@@ -88,3 +88,65 @@ export async function getTopTracks(
   }
   return out;
 }
+
+/**
+ * Preview + artwork for ONE specific song (artist + title). Used by the playlist
+ * feed where we already know the exact track from Spotify. Picks the best match:
+ * same artist, title overlap, and an actual playable preview.
+ */
+export async function getTrackPreview(
+  artist: string,
+  title: string
+): Promise<TopTrack | null> {
+  const qs = new URLSearchParams({
+    term: `${artist} ${title}`,
+    entity: "song",
+    limit: "12",
+  }).toString();
+
+  let data: ItunesResult;
+  try {
+    const res = await fetch(`${BASE}?${qs}`);
+    if (!res.ok) return null;
+    data = (await res.json()) as ItunesResult;
+  } catch {
+    return null;
+  }
+
+  const wantArtist = norm(artist);
+  const wantTitle = norm(title);
+  let best: { score: number; track: TopTrack } | null = null;
+
+  for (const r of data.results || []) {
+    if (r.kind !== "song" || !r.trackName || !r.previewUrl) continue;
+    const credited = norm(r.artistName || "");
+    const t = norm(r.trackName);
+    const artistOk =
+      credited.includes(wantArtist) || wantArtist.includes(credited);
+    if (!artistOk) continue;
+    // score by title closeness: exact norm match beats prefix beats contains
+    let score = 0;
+    if (t === wantTitle) score = 3;
+    else if (t.startsWith(wantTitle) || wantTitle.startsWith(t)) score = 2;
+    else if (t.includes(wantTitle) || wantTitle.includes(t)) score = 1;
+    else continue;
+    if (!best || score > best.score) {
+      best = {
+        score,
+        track: {
+          title: r.trackName,
+          album: r.collectionName,
+          artworkUrl: r.artworkUrl100?.replace("100x100", "300x300"),
+          previewUrl: r.previewUrl,
+          trackTimeMs: r.trackTimeMillis,
+          releaseYear: r.releaseDate
+            ? parseInt(r.releaseDate.slice(0, 4), 10) || undefined
+            : undefined,
+          genre: r.primaryGenreName,
+        },
+      };
+      if (score === 3) break;
+    }
+  }
+  return best?.track ?? null;
+}

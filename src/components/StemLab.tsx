@@ -4,7 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 interface StemData {
   stems: Record<string, string>;
-  melody: { contour: (number | null)[]; topNotes: string[]; voicedFraction: number };
+  melody: {
+    contour: (number | null)[];
+    topNotes: string[];
+    voicedFraction: number;
+    fingerprint?: {
+      rangeLow: string;
+      rangeHigh: string;
+      rangeSemitones: number;
+      register: string;
+      vibrato: string;
+      breathiness: string;
+    } | null;
+  };
   groove: { tempo: number; hitsPerSec: number; onsets: number[] };
   karaoke: { start: number; end: number; text: string; source: string }[];
   error?: string;
@@ -213,6 +225,20 @@ export default function StemLab({
           <div className="stat-sub">
             notes: {data.melody.topNotes.join(" · ")} · {Math.round(data.melody.voicedFraction * 100)}% voiced
           </div>
+          {data.melody.fingerprint && (
+            <div className="vocal-fp">
+              <span className="vfp">
+                range{" "}
+                <b>
+                  {data.melody.fingerprint.rangeLow}–{data.melody.fingerprint.rangeHigh}
+                </b>{" "}
+                ({data.melody.fingerprint.rangeSemitones} st)
+              </span>
+              <span className="vfp">{data.melody.fingerprint.register}</span>
+              <span className="vfp">{data.melody.fingerprint.vibrato}</span>
+              <span className="vfp">{data.melody.fingerprint.breathiness}</span>
+            </div>
+          )}
         </div>
         <div className="stem-card">
           <div className="stat-label" style={{ color: "#ef476f" }}>Drum groove (isolated)</div>

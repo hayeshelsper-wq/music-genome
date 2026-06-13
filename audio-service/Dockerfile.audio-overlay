@@ -1,0 +1,7 @@
+# Thin overlay: replace just the changed code on top of the built audio image
+# (skips the slow torch/demucs/whisper pip install).
+ARG BASE
+FROM ${BASE}
+COPY main.py .
+COPY stems.py .
+COPY flamingo.py .

@@ -80,36 +80,117 @@ export async function getSongMeta(
  * regex truncates), converts <br> to newlines, and strips Genius's leading
  * "contributors / translations / description … Read More" preamble.
  */
+// A realistic browser UA — Genius is more likely to serve the cheap JS-shell
+// variant (no lyrics) to non-browser UAs and datacenter IPs.
+const LYRICS_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
 export async function getLyrics(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (MusicGenomeProject)" },
-    });
-    if (!res.ok) return null;
-    const root = parse(await res.text());
-    const containers = root.querySelectorAll('[data-lyrics-container="true"]');
-    if (containers.length === 0) return null;
+  // Genius intermittently serves a JS-shell page (no [data-lyrics-container],
+  // no lyric text), especially on a cold edge hit or from Cloud Run's IPs. A
+  // retry almost always gets the fully server-rendered page, so attempt a few
+  // times before giving up — otherwise the karaoke silently falls back to raw
+  // Whisper mishears (the "Blinding Lights" bug).
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": LYRICS_UA,
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      });
+      if (!res.ok) {
+        await new Promise((r) => setTimeout(r, 400));
+        continue;
+      }
+      const root = parse(await res.text());
+      const containers = root.querySelectorAll('[data-lyrics-container="true"]');
+      if (containers.length === 0) {
+        await new Promise((r) => setTimeout(r, 400));
+        continue; // shell variant — retry for the SSR page
+      }
 
-    let text = containers
-      .map((c) => {
-        c.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
-        return c.text;
-      })
-      .join("\n");
+      let text = containers
+        .map((c) => {
+          c.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+          return c.text;
+        })
+        .join("\n");
 
-    // The lyrics proper begin at the first section tag ([Verse]/[Chorus]/…);
-    // everything before it is Genius's header/description preamble.
-    const section = text.match(
-      /\[(Verse|Chorus|Intro|Outro|Bridge|Pre-?Chorus|Post-?Chorus|Hook|Refrain|Interlude|Instrumental|Breakdown)\b/i
-    );
-    if (section && section.index !== undefined) {
-      text = text.slice(section.index);
-    } else {
-      text = text.replace(/^[\s\S]*?\bLyrics\b\s*/, "");
+      // The lyrics proper begin at the first section tag ([Verse]/[Chorus]/…);
+      // everything before it is Genius's header/description preamble.
+      const section = text.match(
+        /\[(Verse|Chorus|Intro|Outro|Bridge|Pre-?Chorus|Post-?Chorus|Hook|Refrain|Interlude|Instrumental|Breakdown)\b/i
+      );
+      if (section && section.index !== undefined) {
+        text = text.slice(section.index);
+      } else {
+        text = text.replace(/^[\s\S]*?\bLyrics\b\s*/, "");
+      }
+      text = text.replace(/\n{3,}/g, "\n\n").trim();
+      if (text.length > 20) return text;
+      await new Promise((r) => setTimeout(r, 400));
+    } catch {
+      await new Promise((r) => setTimeout(r, 400));
     }
-    text = text.replace(/\n{3,}/g, "\n\n").trim();
-    return text.length > 20 ? text : null;
-  } catch {
-    return null;
   }
+  return null;
+}
+
+/**
+ * Fetch full lyric text reliably from a server/datacenter IP. Genius serves a
+ * JS-shell page (no lyrics) to datacenter IPs like Cloud Run's, so the page
+ * scrape silently fails there. We try lrclib.net first — a plain JSON lyrics
+ * API built for karaoke apps, no scraping or IP blocking — and only fall back
+ * to the Genius scrape if lrclib has nothing.
+ */
+export async function getLyricsText(
+  artist: string,
+  title: string,
+  geniusUrl?: string
+): Promise<string | null> {
+  const fromLrc = await getLrclibLyrics(artist, title);
+  if (fromLrc) return fromLrc;
+  return geniusUrl ? await getLyrics(geniusUrl) : null;
+}
+
+async function getLrclibLyrics(
+  artist: string,
+  title: string
+): Promise<string | null> {
+  const base = "https://lrclib.net/api";
+  const headers = {
+    "User-Agent": "MusicGenomeProject (music-intelligence demo)",
+  };
+  const enc = encodeURIComponent;
+  try {
+    // Exact match first — cheapest and most accurate.
+    const get = await fetch(
+      `${base}/get?artist_name=${enc(artist)}&track_name=${enc(title)}`,
+      { headers }
+    );
+    if (get.ok) {
+      const d = (await get.json()) as { plainLyrics?: string };
+      const pl = (d.plainLyrics || "").trim();
+      if (pl.length > 20) return pl;
+    }
+    // Fuzzy fallback — handles "(feat. …)" / remaster suffixes in iTunes titles.
+    const search = await fetch(
+      `${base}/search?artist_name=${enc(artist)}&track_name=${enc(title)}`,
+      { headers }
+    );
+    if (search.ok) {
+      const arr = (await search.json()) as { plainLyrics?: string }[];
+      const hit = Array.isArray(arr)
+        ? arr.find((x) => (x.plainLyrics || "").trim().length > 20)
+        : null;
+      if (hit) return (hit.plainLyrics as string).trim();
+    }
+  } catch {
+    /* ignore — fall back to Genius */
+  }
+  return null;
 }

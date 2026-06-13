@@ -1,0 +1,10 @@
+# Builds ONLY the web (Next.js) image — fast.
+substitutions:
+  _AR: ""
+  _TAG: ""
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_AR}/web:${_TAG}", "-f", "Dockerfile", "."]
+images:
+  - "${_AR}/web:${_TAG}"
+timeout: 1800s

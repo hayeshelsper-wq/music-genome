@@ -1,0 +1,13 @@
+# What Cloud Build should NOT upload as build source.
+# Keep audio-service/ (the GPU + CPU images build from it) and all app source.
+node_modules/
+.next/
+.git/
+.claude/
+.env.local
+.env*.local
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+__pycache__/
+*.pyc

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArtistRef } from "@/lib/types";
 
 export default function Home() {
@@ -30,8 +31,9 @@ export default function Home() {
   }, [q]);
 
   return (
-    <div className="container">
-      <div className="hero">
+    <div className="home-page">
+      <div className="home-hero">
+       <div className="hero">
         <h1>The Music Genome Project</h1>
         <p>
           Search any artist and get their DNA — influence lineage, collaborator
@@ -72,6 +74,28 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        <div className="home-spotify">
+          <Link className="btn-ask" href="/ask">
+            💬 Ask the Genome — research anything with an AI music agent →
+          </Link>
+          <span className="home-or" style={{ marginTop: 14 }}>
+            or decode your own playlist
+          </span>
+          <Link className="btn-spotify" href="/playlists">
+            Start from a Spotify playlist →
+          </Link>
+          <Link className="btn" href="/upload" style={{ marginTop: 10 }}>
+            🎚️ Analyze your own audio file →
+          </Link>
+          <Link className="lib-link" href="/library" style={{ marginTop: 8 }}>
+            🎵 Your track library →
+          </Link>
+          <Link className="lib-link" href="/map" style={{ marginTop: 6 }}>
+            🗺️ Sonic Map — a playlist by how it sounds →
+          </Link>
+        </div>
+       </div>
       </div>
     </div>
   );

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.claude
+audio-service
+deploy
+*.md
+.env*
+npm-debug.log*
+Dockerfile
+.dockerignore
+scripts

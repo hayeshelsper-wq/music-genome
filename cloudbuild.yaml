@@ -1,0 +1,28 @@
+# Builds all three container images in one Cloud Build run.
+# The flamingo image builds from the audio-service/ context (so it shares
+# flamingo_local_server.py) but with its own CUDA Dockerfile.
+substitutions:
+  _AR: ""        # e.g. us-central1-docker.pkg.dev/PROJECT_ID/music-genome
+  _TAG: "latest"
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: web
+    args: ["build", "-t", "${_AR}/web:${_TAG}", "-f", "Dockerfile", "."]
+
+  - name: gcr.io/cloud-builders/docker
+    id: audio
+    args: ["build", "-t", "${_AR}/audio:${_TAG}", "-f", "audio-service/Dockerfile", "audio-service"]
+
+  - name: gcr.io/cloud-builders/docker
+    id: flamingo
+    args: ["build", "-t", "${_AR}/flamingo:${_TAG}", "-f", "audio-service/Dockerfile.flamingo", "audio-service"]
+
+images:
+  - "${_AR}/web:${_TAG}"
+  - "${_AR}/audio:${_TAG}"
+  - "${_AR}/flamingo:${_TAG}"
+
+options:
+  machineType: E2_HIGHCPU_8  # the flamingo image pulls a large CUDA base + transformers
+timeout: 3600s
