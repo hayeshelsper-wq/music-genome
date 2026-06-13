@@ -747,14 +747,18 @@ a:hover { text-decoration: underline; }
 .karaoke-src { color: var(--collab); font-size: 11px; font-style: italic; }
 
 /* ---- Spotify playlist feed (Slice 1) ---- */
+/* Uniform pill geometry — shared by every home-stack button (btn-ask, btn-studio,
+   btn-spotify, btn-solid, btn-ghost). Only the FILL differs between them (gradient
+   features / solid Spotify / solid teal / glass utility); shape, padding, weight,
+   size, and spacing are identical so they read as one family. */
 .btn-spotify {
   display: inline-block; background: #1db954; color: #04130a; border: none;
-  font-weight: 700; padding: 12px 22px; border-radius: 999px; margin-top: 8px;
+  font-weight: 700; font-size: 15px; padding: 13px 26px; border-radius: 999px;
   text-decoration: none; transition: filter 0.15s;
 }
 .btn-spotify:hover { filter: brightness(1.08); }
 
-.home-spotify { margin-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.home-spotify { margin-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .home-or { color: var(--muted); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .pl-grid {
@@ -945,8 +949,8 @@ a:hover { text-decoration: underline; }
 .btn-ask {
   display: inline-block;
   background: linear-gradient(100deg, var(--influence), var(--collab));
-  color: #04130a; border: none; font-weight: 700;
-  padding: 13px 24px; border-radius: 999px;
+  color: #04130a; border: none; font-weight: 700; font-size: 15px;
+  padding: 13px 26px; border-radius: 999px;
   text-decoration: none; transition: filter 0.15s; box-shadow: 0 6px 22px -10px var(--collab);
 }
 .btn-ask:hover { filter: brightness(1.08); text-decoration: none; }
@@ -1001,10 +1005,10 @@ a:hover { text-decoration: underline; }
 
 /* ---- The Genome Studio (generate -> verify) ---------------------------- */
 .btn-studio {
-  display: inline-block; margin-top: 10px;
+  display: inline-block;
   background: linear-gradient(100deg, var(--root), var(--descendant));
-  color: #1a0a0a; border: none; font-weight: 700;
-  padding: 13px 24px; border-radius: 999px; text-decoration: none;
+  color: #1a0a0a; border: none; font-weight: 700; font-size: 15px;
+  padding: 13px 26px; border-radius: 999px; text-decoration: none;
   transition: filter 0.15s; box-shadow: 0 6px 22px -10px var(--descendant);
 }
 .btn-studio:hover { filter: brightness(1.08); text-decoration: none; }
@@ -1062,8 +1066,8 @@ a:hover { text-decoration: underline; }
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #5be3b0;
-  font-weight: 600; font-size: 14px;
-  padding: 11px 20px; border-radius: 999px;
+  font-weight: 700; font-size: 15px;
+  padding: 12px 25px; border-radius: 999px; /* 12px y (vs 13) offsets the 1px border so total height matches the filled pills */
   text-decoration: none;
   transition: background 0.15s, border-color 0.15s, filter 0.15s;
 }
@@ -1072,3 +1076,12 @@ a:hover { text-decoration: underline; }
   border-color: rgba(255, 255, 255, 0.32);
   text-decoration: none;
 }
+
+/* Solid teal pill (home "Analyze your own audio file") — same geometry as the
+   rest of the family. Distinct from the global .btn (a smaller in-page button). */
+.btn-solid {
+  display: inline-block; background: var(--influence); color: #04201a; border: none;
+  font-weight: 700; font-size: 15px; padding: 13px 26px; border-radius: 999px;
+  text-decoration: none; cursor: pointer; transition: filter 0.15s;
+}
+.btn-solid:hover { filter: brightness(1.08); text-decoration: none; }

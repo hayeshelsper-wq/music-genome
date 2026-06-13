@@ -88,10 +88,10 @@ export default function Home() {
           <Link className="btn-spotify" href="/playlists">
             Start from a Spotify playlist →
           </Link>
-          <Link className="btn" href="/upload" style={{ marginTop: 10 }}>
+          <Link className="btn-solid" href="/upload">
             🎚️ Analyze your own audio file →
           </Link>
-          <Link className="btn-ghost" href="/library" style={{ marginTop: 8 }}>
+          <Link className="btn-ghost" href="/library">
             🎵 Your track library →
           </Link>
           <Link className="btn-ghost" href="/map">
