@@ -91,10 +91,10 @@ export default function Home() {
           <Link className="btn" href="/upload" style={{ marginTop: 10 }}>
             🎚️ Analyze your own audio file →
           </Link>
-          <Link className="lib-link" href="/library" style={{ marginTop: 8 }}>
+          <Link className="btn-ghost" href="/library" style={{ marginTop: 8 }}>
             🎵 Your track library →
           </Link>
-          <Link className="lib-link" href="/map" style={{ marginTop: 6 }}>
+          <Link className="btn-ghost" href="/map">
             🗺️ Sonic Map — a playlist by how it sounds →
           </Link>
         </div>
