@@ -42,6 +42,7 @@ plumbing, mirroring how Stem Lab already worked.
 | `artistReports` | MBID | the fully‑assembled `ArtistDnaReport` (family/collaborator graphs, similar, tags, timeline) |
 | `uploads` | upload id | DSP `features`, `tags`, producer `review`, Flamingo read, `key`/`tempo`, and a **CLAP `embedding`** stored as a Firestore *vector* (for KNN) |
 | `artistSonic` | MBID | a per‑artist sonic fingerprint: CLAP centroid + aggregate DSP over top tracks (powers Trails / Lineage; cached so repeats are instant) |
+| `xrayCache` | `artist\|title` (normalized) | a fully‑assembled Song X‑Ray: DSP, instrument/mood/genre tags, the Music Flamingo read, lyrics, and the Claude producer breakdown — plus `previewUrl` + `artwork` for replay. Persists across cold instances so a once‑computed X‑Ray (the costly part is the Flamingo GPU) is instant forever |
 
 The graphs are all 1‑hop, so the app stores a denormalized report document per
 artist rather than running a graph database — see *Decisions* below.
@@ -80,6 +81,21 @@ which places an upload by similarity‑weighted nearest neighbors).
 with Demucs, conforms the acapella to the bed (Rubber Band time‑stretch to its
 tempo + pitch‑shift to its key), mixes, and returns one clip.
 
+**Song X‑Ray** (`GET /api/track/analyze` → `GET /api/track/flamingo`) — the
+analyze route first checks the persistent `xrayCache`; a complete hit returns the
+full X‑Ray instantly with no audio‑service or GPU call. On a miss it runs the DSP
++ tag + lyric pipeline (fast) and kicks off the Flamingo backfill; once the
+audio‑LLM read lands, the flamingo route assembles the complete record and
+persists it to `xrayCache`. Examples are pre‑warmed offline by
+`scripts/build-xray-examples.ts`, which drives these same gated endpoints for a
+curated song list so `/showcase` always has instant, full X‑Rays without paying
+the Flamingo cold start at demo time.
+
+**Homepage command center** (`GET /api/home`) — the dashboard aggregates live
+state for instant context: artists recently in the genome (from `artistSonic`),
+the upload‑library count, and the report count. It reads only persisted data, so
+the homepage renders fast and reflects whatever the system has already learned.
+
 ## The shared backbone
 
 - **CLAP** (LAION `clap-htsat-unfused`) — one 512‑dim text+audio space behind
@@ -96,6 +112,10 @@ tempo + pitch‑shift to its key), mixes, and returns one clip.
 - `artistSonic` fingerprints persist in Firestore — first trail/lineage for an
   artist is slow; repeats are instant.
 - artist reports persist in Firestore after first ingest.
+- **Song X‑Rays persist in `xrayCache`** — the expensive part is the Flamingo GPU
+  cold start, so a fully‑assembled X‑Ray is stored once and served instantly
+  thereafter (and survives Cloud Run cold instances, unlike an in‑process cache).
+  Pre‑warmed examples back `/showcase`.
 - generation/mashup are not cached (each run re‑separates/re‑generates).
 
 ## Decisions & tradeoffs

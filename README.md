@@ -58,6 +58,13 @@ It runs entirely on **Google Cloud** (Cloud Run, Firestore, GCS, Secret Manager)
 
 ## Feature tour
 
+A persistent **global nav bar** ties the whole app together; the homepage is a data‑driven command center rather than a menu.
+
+### 🏠 The command center (homepage)
+On load, the dashboard shows live stats, contextual tiles for every tool, a **"Recently in the genome"** strip of already‑analyzed artists (album art + tap‑to‑preview, pulled from the cache), and a mini **Living Map** — a real taste of the system, not an empty search box.
+
+![Homepage dashboard](docs/screenshots/home-explore.png)
+
 ### 🧬 Artist DNA Report
 Search any artist and get a living report: a directional **influence family tree** (Wikidata P737), a **collaborator/producer network** (MusicBrainz relations), a **genre‑evolution timeline**, an LLM **DNA profile**, and **Sonic DNA** — playable 30‑second previews with measured audio features (tempo, key, danceability, mood) from iTunes + AcousticBrainz. Every node is clickable to dive into that artist.
 
