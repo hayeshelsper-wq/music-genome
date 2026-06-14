@@ -1,4 +1,3 @@
-import Link from "next/link";
 import AskGenome from "@/components/AskGenome";
 
 export const metadata = {
@@ -8,11 +7,6 @@ export const metadata = {
 export default function AskPage() {
   return (
     <div className="ask-page">
-      <div className="ask-topbar">
-        <Link className="lib-link" href="/">
-          ← Home
-        </Link>
-      </div>
       <AskGenome />
     </div>
   );

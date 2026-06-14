@@ -1,4 +1,3 @@
-import Link from "next/link";
 import GenomeStudio from "@/components/GenomeStudio";
 
 export const metadata = {
@@ -8,11 +7,6 @@ export const metadata = {
 export default function StudioPage() {
   return (
     <div className="container">
-      <div style={{ paddingBottom: 12 }}>
-        <Link className="lib-link" href="/">
-          ← Home
-        </Link>
-      </div>
       <GenomeStudio />
     </div>
   );

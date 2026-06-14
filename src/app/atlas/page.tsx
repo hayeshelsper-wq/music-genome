@@ -1,4 +1,3 @@
-import Link from "next/link";
 import AtlasMap from "@/components/AtlasMap";
 
 export const metadata = {
@@ -8,11 +7,6 @@ export const metadata = {
 export default function AtlasPage() {
   return (
     <div className="container">
-      <div style={{ paddingBottom: 12 }}>
-        <Link className="lib-link" href="/">
-          ← Home
-        </Link>
-      </div>
       <AtlasMap />
     </div>
   );

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import InfluenceTrail from "@/components/InfluenceTrail";
 
 export const metadata = {
@@ -8,11 +7,6 @@ export const metadata = {
 export default function TrailPage() {
   return (
     <div className="container">
-      <div style={{ paddingBottom: 12 }}>
-        <Link className="lib-link" href="/">
-          ← Home
-        </Link>
-      </div>
       <InfluenceTrail />
     </div>
   );

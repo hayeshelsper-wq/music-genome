@@ -20,16 +20,6 @@ interface HomeData {
 }
 interface MapTrack { genre: string; x: number; y: number }
 
-const NAV = [
-  { href: "/ask", label: "Ask" },
-  { href: "/studio", label: "Studio" },
-  { href: "/trail", label: "Trails" },
-  { href: "/lineage", label: "Lineage" },
-  { href: "/atlas", label: "Map" },
-  { href: "/mashup", label: "Mashup" },
-  { href: "/library", label: "Library" },
-];
-
 const FEATURES = [
   { href: "/ask", icon: "💬", title: "Ask the Genome", desc: "An AI agent that drives the whole stack to answer questions a search box can't.", accent: "linear-gradient(100deg, var(--influence), var(--collab))" },
   { href: "/studio", icon: "🎛️", title: "The Genome Studio", desc: "Generate music in an artist's DNA — then score how close it actually landed.", accent: "linear-gradient(100deg, var(--root), var(--descendant))" },
@@ -84,13 +74,6 @@ export default function Home() {
 
   return (
     <div className="dash">
-      <header className="nav">
-        <Link href="/" className="nav-logo">🧬 <span>Music Genome</span></Link>
-        <nav className="nav-links">
-          {NAV.map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}
-        </nav>
-      </header>
-
       <section className="dash-hero">
         <h1>The Music Genome Project</h1>
         <p>A command center for music intelligence — search any artist for their DNA, or dive into the tools below.</p>
