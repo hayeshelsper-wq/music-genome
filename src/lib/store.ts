@@ -252,6 +252,32 @@ export async function saveArtistSonic(rec: ArtistSonic): Promise<void> {
   await getDb().collection(ARTIST_SONIC).doc(rec.mbid).set(rec);
 }
 
+/** Recently-fingerprinted artists for the homepage "explore" strip (artwork +
+ *  measured stats). Drops the heavy embedding from the payload. */
+export async function listArtistSonic(limit = 8): Promise<Omit<ArtistSonic, "embedding">[]> {
+  const snap = await getDb()
+    .collection(ARTIST_SONIC)
+    .orderBy("computedAt", "desc")
+    .limit(limit)
+    .get();
+  return snap.docs.map((d) => {
+    const data = d.data() as ArtistSonic;
+    const { embedding: _drop, ...rest } = data;
+    void _drop;
+    return rest;
+  });
+}
+
+/** Count of ingested artist reports (a homepage stat). Best-effort. */
+export async function countReports(): Promise<number> {
+  try {
+    const agg = await getDb().collection(COLLECTION).count().get();
+    return agg.data().count;
+  } catch {
+    return 0;
+  }
+}
+
 export type StoreErrorCode = "unconfigured" | "unavailable" | "error";
 
 /** Classify a Firestore failure so the UI shows the right thing: a setup prompt

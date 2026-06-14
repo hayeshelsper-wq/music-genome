@@ -1274,3 +1274,98 @@ a:hover { text-decoration: underline; }
 .lineage-narration { margin-top: 18px; background: linear-gradient(180deg, rgba(255,209,102,0.08), transparent);
   border: 1px solid var(--border); border-left: 3px solid var(--root); border-radius: 12px; padding: 14px 18px; line-height: 1.65; }
 .lineage-narration p { margin: 8px 0 0; font-size: 15px; }
+
+/* ===== Homepage command-center dashboard ============================== */
+.dash {
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 620px at 18% -8%, rgba(91,141,239,0.22), transparent 60%),
+    radial-gradient(900px 600px at 100% 8%, rgba(6,214,160,0.12), transparent 55%),
+    var(--bg);
+}
+.dash-section { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+.dash-section + .dash-section { margin-top: 44px; }
+
+/* nav */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; max-width: 1080px; margin: 0 auto;
+  /* full-bleed bar via box-shadow trick not needed; keep within container */
+}
+.nav { background: rgba(10,10,15,0.55); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+  max-width: none; }
+.nav-logo { font-weight: 800; font-size: 17px; color: var(--text); display: inline-flex; gap: 7px; align-items: center; }
+.nav-logo:hover { text-decoration: none; }
+.nav-logo span { background: linear-gradient(100deg, var(--influence), var(--collab)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav-links a { color: var(--muted); font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; transition: color 0.15s, background 0.15s; }
+.nav-links a:hover { color: var(--text); background: var(--panel-2); text-decoration: none; }
+
+/* hero */
+.dash-hero { max-width: 760px; margin: 0 auto; padding: 56px 24px 8px; text-align: center; }
+.dash-hero h1 { font-size: 46px; letter-spacing: -0.025em; margin: 0 0 10px; }
+.dash-hero > p { color: var(--muted); font-size: 17px; margin: 0 0 26px; }
+.dash-search { margin: 0 auto; }
+.dash-stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 22px; margin-top: 22px; color: var(--muted); font-size: 14px; }
+.dash-stats b { color: var(--text); font-weight: 700; }
+
+/* section headings */
+.dash-h2 { font-size: 20px; margin: 0 0 16px; letter-spacing: -0.01em; }
+.dash-h2-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.dash-h2-row .dash-h2 { margin: 0; }
+.dash-h2-sub { font-size: 13px; }
+
+/* feature tiles */
+.feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.feat-tile {
+  position: relative; overflow: hidden; display: block;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px 18px 18px; color: var(--text);
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+}
+.feat-tile:hover { transform: translateY(-3px); border-color: #3a3a4d; background: var(--panel-2); text-decoration: none; }
+.feat-bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+.feat-icon { font-size: 26px; margin-bottom: 10px; }
+.feat-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.feat-desc { font-size: 14px; color: var(--muted); line-height: 1.5; }
+.feat-go { display: inline-block; margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--influence); }
+
+/* artist strip */
+.artist-strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
+.artist-card { flex: 0 0 150px; }
+.artist-art {
+  width: 150px; height: 150px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--panel-2) center/cover no-repeat; cursor: pointer; position: relative;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.artist-art:hover { border-color: var(--influence); }
+.artist-play { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,0.55);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px;
+  opacity: 0; transition: opacity 0.15s; }
+.artist-art:hover .artist-play { opacity: 1; }
+.artist-name { display: block; margin-top: 8px; font-weight: 700; font-size: 14px; color: var(--text); line-height: 1.25; }
+.artist-meta { font-size: 12px; margin-top: 2px; }
+
+/* mini living map */
+.map-preview { display: block; position: relative; border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; background: radial-gradient(circle at 50% 30%, #0e1530, #07070c 75%); }
+.map-preview-svg { width: 100%; height: 200px; display: block; }
+.map-preview:hover { border-color: var(--collab); }
+.map-preview-cta { position: absolute; left: 18px; bottom: 16px; }
+.map-preview-title { font-weight: 800; font-size: 18px; }
+
+/* decode-your-own */
+.decode-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.decode-tile { display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; color: var(--text); transition: border-color 0.15s, background 0.15s; }
+.decode-tile:hover { border-color: var(--influence); background: var(--panel-2); text-decoration: none; }
+.decode-tile b { font-size: 15px; }
+.decode-tile span { font-size: 13px; }
+
+.dash-footer { max-width: 1080px; margin: 56px auto 0; padding: 28px 24px; border-top: 1px solid var(--border); font-size: 13px; text-align: center; }
+
+@media (max-width: 560px) {
+  .nav-links a { padding: 6px 9px; font-size: 13px; }
+  .dash-hero h1 { font-size: 34px; }
+}
