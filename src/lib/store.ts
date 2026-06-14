@@ -219,6 +219,39 @@ export async function deleteUpload(id: string): Promise<UploadRecord | null> {
   return rec;
 }
 
+// ---- artist sonic fingerprint (Influence Trails) --------------------------
+// A per-artist sonic profile (CLAP centroid + aggregate DSP over their top
+// tracks), cached so repeat trails are instant. No KNN over artists, so the
+// embedding is a plain array (not a Firestore vector).
+
+export interface ArtistSonic {
+  mbid: string;
+  name: string;
+  tempo_bpm?: number;
+  brightness_hz?: number;
+  brightness?: string;
+  texture?: string;
+  density?: string;
+  dynamics?: string;
+  energy_shape?: string;
+  key?: string;
+  tracks: { title: string; previewUrl: string; artworkUrl?: string }[];
+  embedding: number[]; // CLAP centroid of the analyzed top tracks
+  trackCount: number;
+  computedAt: number;
+}
+
+const ARTIST_SONIC = process.env.ARTIST_SONIC_COLLECTION || "artistSonic";
+
+export async function getArtistSonic(mbid: string): Promise<ArtistSonic | null> {
+  const snap = await getDb().collection(ARTIST_SONIC).doc(mbid).get();
+  return snap.exists ? (snap.data() as ArtistSonic) : null;
+}
+
+export async function saveArtistSonic(rec: ArtistSonic): Promise<void> {
+  await getDb().collection(ARTIST_SONIC).doc(rec.mbid).set(rec);
+}
+
 export type StoreErrorCode = "unconfigured" | "unavailable" | "error";
 
 /** Classify a Firestore failure so the UI shows the right thing: a setup prompt

@@ -82,6 +82,9 @@ export default function Home() {
           <Link className="btn-studio" href="/studio">
             🧬 The Genome Studio — generate music from DNA, then score it →
           </Link>
+          <Link className="btn-trail" href="/trail">
+            🎧 Influence Trails — hear how the sound was inherited →
+          </Link>
           <span className="home-or" style={{ marginTop: 14 }}>
             or decode your own playlist
           </span>

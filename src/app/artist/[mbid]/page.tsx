@@ -270,6 +270,11 @@ export default function ArtistPage() {
                 <span><i className="dot" style={{ background: "#06d6a0" }} /> influenced by →</span>
                 <span><i className="dot" style={{ background: "#ef476f" }} /> → went on to influence</span>
               </div>
+              <div style={{ marginTop: 12 }}>
+                <Link className="lib-link" href={`/trail?mbid=${a.mbid}&name=${encodeURIComponent(a.name)}`}>
+                  🎧 Hear these influences as a trail →
+                </Link>
+              </div>
             </>
           ) : (
             <p className="muted">
