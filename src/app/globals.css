@@ -1208,3 +1208,69 @@ a:hover { text-decoration: underline; }
 .atlas-select { margin-top: 10px; width: 100%; max-width: 420px; padding: 10px 12px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 14px; }
 .atlas-place-result { margin-top: 12px; font-size: 14px; line-height: 1.5; }
+
+/* ---- Mashup Lab (#4) + Lineage Walk ----------------------------------- */
+.btn-mashup {
+  display: inline-block; background: linear-gradient(100deg, var(--influence), var(--root));
+  color: #08200f; border: none; font-weight: 700; font-size: 15px;
+  padding: 13px 26px; border-radius: 999px; text-decoration: none;
+  transition: filter 0.15s; box-shadow: 0 6px 22px -10px var(--influence);
+}
+.btn-mashup:hover { filter: brightness(1.08); text-decoration: none; }
+.btn-lineage {
+  display: inline-block; background: linear-gradient(100deg, var(--root), var(--influence));
+  color: #08200f; border: none; font-weight: 700; font-size: 15px;
+  padding: 13px 26px; border-radius: 999px; text-decoration: none;
+  transition: filter 0.15s; box-shadow: 0 6px 22px -10px var(--root);
+}
+.btn-lineage:hover { filter: brightness(1.08); text-decoration: none; }
+
+.mashup, .lineage { max-width: 860px; margin: 0 auto; }
+.mashup-head h2, .lineage-head h2 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.02em;
+  background: linear-gradient(100deg, var(--influence), var(--root));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mashup-head p, .lineage-head p { font-size: 15px; line-height: 1.55; margin: 0 0 20px; }
+
+.mashup-decks { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: start; }
+.mashup-deck { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.mashup-deck.a { border-top: 3px solid var(--influence); }
+.mashup-deck.b { border-top: 3px solid var(--root); }
+.mashup-deck-label { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.mashup-select { width: 100%; padding: 9px 11px; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); font-size: 13px; }
+.mashup-preview { width: 100%; height: 34px; margin-top: 10px; }
+.mashup-suggest { margin-top: 10px; }
+.mashup-plus { align-self: center; font-size: 28px; color: var(--muted); font-weight: 700; }
+.mashup-go { width: 100%; margin-top: 16px; padding: 13px; font-size: 15px; }
+.mashup-stage, .lineage-stage { display: flex; align-items: center; margin-top: 12px; font-size: 14px; }
+.mashup-error, .lineage-error { margin-top: 12px; color: var(--descendant); font-size: 14px; }
+.mashup-result { margin-top: 22px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.mashup-result-title { font-size: 16px; margin-bottom: 12px; }
+.mashup-out { width: 100%; margin-bottom: 14px; }
+.mashup-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mashup-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+.mashup-table td:first-child { color: var(--muted); width: 45%; }
+@media (max-width: 640px) { .mashup-decks { grid-template-columns: 1fr; } .mashup-plus { transform: rotate(90deg); } }
+
+.lineage-pick { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.lineage-search { position: relative; }
+.lineage-dir { display: flex; gap: 8px; margin-top: 12px; }
+.lineage-go { width: 100%; margin-top: 14px; padding: 13px; font-size: 15px; }
+.lineage-result { margin-top: 22px; }
+.lineage-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.lineage-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px; }
+.lineage-node-wrap { display: flex; align-items: center; gap: 4px; }
+.lineage-node { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+  width: 130px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--text); text-align: center; transition: border-color 0.15s; }
+.lineage-node:hover:not(:disabled) { border-color: var(--root); }
+.lineage-node:disabled { opacity: 0.5; cursor: default; }
+.lineage-node.on { border-color: var(--root); box-shadow: 0 0 0 2px var(--root) inset; }
+.lineage-node img { width: 84px; height: 84px; border-radius: 8px; object-fit: cover; }
+.lineage-node-name { font-weight: 700; font-size: 13px; line-height: 1.2; }
+.lineage-node-feat { font-size: 11px; }
+.lineage-node-dna { font-size: 11px; color: var(--influence); }
+.lineage-arrow { display: flex; flex-direction: column; align-items: center; color: var(--muted); font-size: 14px; padding: 0 2px; }
+.lineage-sim { font-size: 10px; }
+.lineage-narration { margin-top: 18px; background: linear-gradient(180deg, rgba(255,209,102,0.08), transparent);
+  border: 1px solid var(--border); border-left: 3px solid var(--root); border-radius: 12px; padding: 14px 18px; line-height: 1.65; }
+.lineage-narration p { margin: 8px 0 0; font-size: 15px; }

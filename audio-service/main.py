@@ -396,6 +396,34 @@ def transcribe_timed(path: str) -> list:
         return []
 
 
+class MashupReq(BaseModel):
+    aUrl: str
+    bUrl: str
+    aStems: list = ["vocals"]
+    bStems: list = ["drums", "bass", "other"]
+
+
+@app.post("/mashup")
+def make_mashup(req: MashupReq):
+    """Mashup Lab: Demucs-separate both tracks, conform A's stems to B's tempo+key,
+    and return a single mixed clip (base64 wav data URL)."""
+    import base64
+    import mashup as mashuplib
+
+    a = b = None
+    try:
+        a = _download(req.aUrl)
+        b = _download(req.bUrl)
+        wav, meta = mashuplib.mashup(a, b, req.aStems, req.bStems)
+        return {"audio": "data:audio/wav;base64," + base64.b64encode(wav).decode(), **meta}
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:200]}
+    finally:
+        for p in (a, b):
+            if p and os.path.exists(p):
+                os.unlink(p)
+
+
 @app.post("/stems")
 def separate_stems(req: AnalyzeReq):
     """Demucs stem separation + per-stem analysis + karaoke timing."""

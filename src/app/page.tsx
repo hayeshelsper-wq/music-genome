@@ -88,6 +88,12 @@ export default function Home() {
           <Link className="btn-atlas" href="/atlas">
             🗺️ The Living Map — watch genres evolve across decades →
           </Link>
+          <Link className="btn-mashup" href="/mashup">
+            🎛️ Mashup Lab — vocals from one track, the beat from another →
+          </Link>
+          <Link className="btn-lineage" href="/lineage">
+            🧭 Lineage Walk — an auto-playing influence documentary →
+          </Link>
           <span className="home-or" style={{ marginTop: 14 }}>
             or decode your own playlist
           </span>
