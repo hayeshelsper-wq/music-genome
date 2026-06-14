@@ -1156,3 +1156,55 @@ a:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .trail-flow { grid-template-columns: 1fr; }
 }
+
+/* ---- The Living Map of Music (#5) -------------------------------------- */
+.btn-atlas {
+  display: inline-block;
+  background: linear-gradient(100deg, var(--collab), var(--root));
+  color: #08131f; border: none; font-weight: 700; font-size: 15px;
+  padding: 13px 26px; border-radius: 999px; text-decoration: none;
+  transition: filter 0.15s; box-shadow: 0 6px 22px -10px var(--collab);
+}
+.btn-atlas:hover { filter: brightness(1.08); text-decoration: none; }
+
+.atlas { max-width: 1000px; margin: 0 auto; }
+.atlas-head h2 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.02em;
+  background: linear-gradient(100deg, var(--collab), var(--root));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.atlas-head p { font-size: 15px; line-height: 1.55; margin: 0 0 18px; max-width: 760px; }
+.atlas-error { color: var(--descendant); margin-bottom: 12px; }
+
+.atlas-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.atlas-slider { flex: 1; accent-color: var(--collab); }
+.atlas-year { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--root); min-width: 56px; text-align: right; }
+.atlas-count { font-size: 13px; min-width: 72px; }
+
+.atlas-stage { position: relative; }
+.atlas-svg { width: 100%; height: auto; background: radial-gradient(circle at 50% 40%, #0e1530, #07070c 75%);
+  border: 1px solid var(--border); border-radius: 16px; }
+.atlas-pt { opacity: 0; pointer-events: none; transition: opacity 0.4s ease; cursor: pointer; }
+.atlas-pt.on { opacity: 0.92; pointer-events: auto; }
+.atlas-pt.on:hover circle { filter: brightness(1.25); }
+.atlas-pt circle { transition: r 0.15s; }
+.atlas-pt-ring { opacity: 0.7; }
+.atlas-you-ring { opacity: 0.8; animation: atlasPulse 1.5s ease-out infinite; }
+@keyframes atlasPulse { 0% { r: 12; opacity: 0.9; } 100% { r: 26; opacity: 0; } }
+.atlas-you-label { fill: #fff; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; }
+
+.atlas-card { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 12px; align-items: center;
+  background: rgba(10,10,15,0.82); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+  backdrop-filter: blur(6px); max-width: 340px; }
+.atlas-card img { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; }
+.atlas-card-title { font-weight: 700; font-size: 15px; }
+.atlas-card-genre { font-size: 12px; font-weight: 600; }
+
+.atlas-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.atlas-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.atlas-legend i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+
+.atlas-place { margin-top: 22px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px; }
+.atlas-select { margin-top: 10px; width: 100%; max-width: 420px; padding: 10px 12px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 14px; }
+.atlas-place-result { margin-top: 12px; font-size: 14px; line-height: 1.5; }

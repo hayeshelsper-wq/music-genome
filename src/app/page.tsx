@@ -85,6 +85,9 @@ export default function Home() {
           <Link className="btn-trail" href="/trail">
             🎧 Influence Trails — hear how the sound was inherited →
           </Link>
+          <Link className="btn-atlas" href="/atlas">
+            🗺️ The Living Map — watch genres evolve across decades →
+          </Link>
           <span className="home-or" style={{ marginTop: 14 }}>
             or decode your own playlist
           </span>
