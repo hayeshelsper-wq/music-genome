@@ -1,5 +1,7 @@
 # 🧬 The Music Genome Project
 
+**🌐 Live:** [web-4dlnl52txa-uc.a.run.app](https://web-4dlnl52txa-uc.a.run.app) — running on Google Cloud (private, password‑gated preview; ask for access).
+
 A music‑intelligence platform that treats songs and artists as **measurable, multimodal data** — a knowledge graph of influence and collaboration, fused with real audio analysis (DSP + CLAP embeddings + source separation) and an LLM layer — and turns that into things a streaming service can't do: generate music in an artist's DNA and grade it, *hear* the family tree, mash two songs together in key and tempo, and watch genres evolve across a sonic map of history.
 
 ![Home](docs/screenshots/home.png)
