@@ -119,7 +119,22 @@ export default function LineageWalk() {
       {walk && (
         <div className="lineage-result">
           <div className="lineage-controls">
-            <button className="btn-mini" onClick={toggle}>{playing ? "⏸ Pause" : "▶ Play the walk"}</button>
+            <button
+              className="map-play-btn"
+              onClick={toggle}
+              aria-label={playing ? "Pause the walk" : "Play the walk"}
+              title={playing ? "Pause" : "Play the walk"}
+            >
+              {playing ? (
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                  <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </button>
             <span className="muted">{walk.artists.length} stops · plays each clip back to back</span>
           </div>
 
