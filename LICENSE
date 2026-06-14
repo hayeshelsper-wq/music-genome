@@ -1,0 +1,24 @@
+Copyright (c) 2026 Hayes Helsper. All rights reserved.
+
+The Music Genome Project (the "Software") — including its source code, the
+curated data and embeddings under src/data/ and public/, and the documentation
+and images under docs/ — is proprietary and confidential.
+
+No license, express or implied, is granted to any person to use, copy, modify,
+merge, publish, distribute, sublicense, or sell copies of the Software, or to
+create derivative works of it, without the prior written permission of the
+copyright holder. The Software is shared for evaluation and portfolio review
+only.
+
+Third‑party components are governed by their own licenses, including but not
+limited to: Demucs, Meta MusicGen, NVIDIA Audio Flamingo, LAION CLAP, Essentia,
+librosa, Rubber Band, the Anthropic API, and the data providers (MusicBrainz,
+Wikidata, Last.fm, Apple iTunes, Genius, AcousticBrainz). Their terms apply to
+their respective parts and to any data retrieved from them.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

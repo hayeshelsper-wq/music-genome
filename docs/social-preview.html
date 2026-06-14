@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Source for .github/social-preview.png (GitHub social card, 1280x640).
+     Rendered to PNG via a headless browser at 1280x640. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 640px; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1100px 700px at 22% -10%, rgba(91,141,239,0.28), transparent 60%),
+      radial-gradient(900px 700px at 100% 120%, rgba(239,71,111,0.22), transparent 55%),
+      #0a0a0f;
+    color: #e8e8f0; position: relative; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 84px;
+  }
+  /* faint "sonic map" dots in the backdrop */
+  .dots { position: absolute; inset: 0; opacity: 0.5; }
+  .dot { position: absolute; width: 12px; height: 12px; border-radius: 50%; filter: blur(0.3px); }
+  .eyebrow { font-size: 22px; letter-spacing: 0.32em; text-transform: uppercase;
+    color: #9a9ab0; margin-bottom: 18px; }
+  h1 { font-size: 92px; line-height: 0.98; letter-spacing: -0.025em; font-weight: 800;
+    background: linear-gradient(100deg, #06d6a0, #5b8def 55%, #ef476f);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { font-size: 30px; color: #c7c7d6; margin-top: 24px; max-width: 940px; line-height: 1.4; }
+  .sub b { color: #fff; font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; max-width: 1020px; }
+  .chip { font-size: 21px; font-weight: 600; padding: 10px 18px; border-radius: 999px;
+    border: 1px solid #2a2a3a; background: rgba(255,255,255,0.05); color: #e8e8f0; }
+  .footer { position: absolute; bottom: 40px; left: 84px; font-size: 20px; color: #6f6f86; }
+</style>
+</head>
+<body>
+  <div class="dots" id="dots"></div>
+  <div class="eyebrow">Multimodal music intelligence</div>
+  <h1>The Music<br/>Genome Project</h1>
+  <div class="sub">A knowledge graph of influence + real audio analysis (DSP · CLAP · stems) + an LLM layer — so you can <b>generate music in an artist's DNA and grade it</b>, hear the family tree, and map how genres evolved.</div>
+  <div class="chips">
+    <span class="chip">🧬 Artist DNA</span>
+    <span class="chip">💬 Agentic chat</span>
+    <span class="chip">🎛️ Generate → verify</span>
+    <span class="chip">🎧 Influence trails</span>
+    <span class="chip">🗺️ Living map</span>
+    <span class="chip">🎚️ Mashup lab</span>
+  </div>
+  <div class="footer">Next.js · FastAPI · CLAP · Demucs · MusicGen · Claude · Google Cloud</div>
+  <script>
+    const colors = ["#06d6a0","#5b8def","#ffd166","#ef476f","#f15bb5","#00bbf9","#9b5de5","#ff9f1c"];
+    const d = document.getElementById("dots");
+    let html = "";
+    for (let i = 0; i < 46; i++) {
+      const x = Math.random()*1280, y = Math.random()*640, c = colors[i % colors.length];
+      const s = 6 + Math.random()*12;
+      html += `<span class="dot" style="left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${c}"></span>`;
+    }
+    d.innerHTML = html;
+  </script>
+</body>
+</html>

@@ -52,6 +52,8 @@ It runs entirely on **Google Cloud** (Cloud Run, Firestore, GCS, Secret Manager)
 - **GPU services** — two scale‑to‑zero NVIDIA **L4** Cloud Run services: **MusicGen** (generation) and **Audio Flamingo** (an audio‑LLM that describes a clip like a producer would).
 - **Anthropic Claude** (`claude-opus-4-8`) powers every prose/narration surface and the agentic chat's tool‑use loop.
 
+> 📐 For a deeper technical write‑up — request lifecycles, the Firestore data model, service‑to‑service auth, caching, and the design decisions/tradeoffs — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
 ---
 
 ## Feature tour
