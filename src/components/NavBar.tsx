@@ -10,6 +10,7 @@ const NAV = [
   { href: "/lineage", label: "Lineage" },
   { href: "/atlas", label: "Map" },
   { href: "/mashup", label: "Mashup" },
+  { href: "/showcase", label: "X-Rays" },
   { href: "/library", label: "Library" },
 ];
 

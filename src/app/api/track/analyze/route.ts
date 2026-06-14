@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSongMeta, getLyricsText, SongMeta } from "@/lib/genius";
 import { generateTrackReview, TrackFeatures, TagSet } from "@/lib/trackReview";
 import { callAudio, callFlamingo } from "@/lib/trackAudio";
+import { getXray, saveXray } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -34,6 +35,18 @@ export async function GET(req: NextRequest) {
   if (!previewUrl) return NextResponse.json({ error: "previewUrl required" }, { status: 400 });
 
   if (cache.has(previewUrl)) return NextResponse.json(cache.get(previewUrl));
+
+  // Persistent X-Ray cache (Firestore) — survives cold instances, so a song
+  // pre-rendered once (with Flamingo) is instant forever, no GPU needed.
+  try {
+    const cached = (await getXray(artist, title)) as TrackAnalysis | null;
+    if (cached?.features && cached.flamingoStatus === "complete") {
+      cache.set(previewUrl, cached);
+      return NextResponse.json(cached);
+    }
+  } catch {
+    /* Firestore unavailable — fall through to live analysis */
+  }
 
   try {
     // librosa analysis + Music Flamingo + Genius metadata all run concurrently.
@@ -94,7 +107,11 @@ export async function GET(req: NextRequest) {
     // cache — so the backfill (and later requests) retry once the GPU is warm.
     const flamingoSettled =
       !flamingoRes.cold && (!!flamingo || flamingoRes.error === "disabled");
-    if (features && flamingoSettled) cache.set(previewUrl, result);
+    if (features && flamingoSettled) {
+      cache.set(previewUrl, result);
+      // Persist completed X-Rays (those with a real Flamingo read) for instant reuse.
+      if (flamingo) saveXray(artist, title, result as unknown as Record<string, unknown>, { previewUrl, artwork: meta?.artworkUrl }).catch(() => {});
+    }
     return NextResponse.json(result);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "analysis failed";

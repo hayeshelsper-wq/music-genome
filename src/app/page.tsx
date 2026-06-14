@@ -27,6 +27,7 @@ const FEATURES = [
   { href: "/lineage", icon: "🧭", title: "Lineage Walk", desc: "An auto-playing documentary that walks a chain of musical influence.", accent: "linear-gradient(100deg, var(--root), var(--influence))" },
   { href: "/atlas", icon: "🗺️", title: "The Living Map", desc: "Watch genres evolve across decades on a map of how music sounds.", accent: "linear-gradient(100deg, var(--collab), var(--root))" },
   { href: "/mashup", icon: "🎚️", title: "Mashup Lab", desc: "Vocals from one track, the beat from another — conformed in key & tempo.", accent: "linear-gradient(100deg, var(--influence), var(--root))" },
+  { href: "/showcase", icon: "🔬", title: "Song X-Ray", desc: "Full synthetic metadata for a track — DSP, audio-model read, lyrics & a producer breakdown.", accent: "linear-gradient(100deg, var(--collab), var(--influence))" },
 ];
 
 const GENRE_COLORS: Record<string, string> = {

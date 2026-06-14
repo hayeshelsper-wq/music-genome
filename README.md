@@ -93,8 +93,13 @@ Take the **vocals** from one track and the **instrumental** from another. Demucs
 
 ![Mashup Lab](docs/screenshots/mashup.png)
 
+### 🔬 Song X‑Ray (Showcase)
+The full synthetic metadata for a track in one view — measured DSP (librosa), instrument/mood/genre tags (Essentia), the **Music Flamingo** audio‑model read, accurate lyrics, and a Grammy‑producer‑style breakdown written by **Claude**. A curated set is **pre‑rendered and persisted** (Firestore), so the Showcase loads complete X‑Rays instantly — no Flamingo GPU cold start.
+
+![Song X-Ray Showcase](docs/screenshots/showcase.png)
+
 ### …plus the rest of the platform
-- **Song X‑Ray** — per‑track DSP + the Audio Flamingo read + Genius credits/lyrics, synthesized into a Grammy‑producer‑style breakdown.
+- **Song X‑Ray (live)** — run the same analysis on any track from an artist page, playlist, or upload (computed on demand, then cached for instant reuse).
 - **Stem Lab** — Demucs solo/mute player with per‑stem analysis and karaoke timing.
 - **Upload & analyze your own audio** — full‑song DSP, CLAP embedding, and a producer breakdown, saved to a personal library.
 - **Sonic Map** — a playlist laid out by how it sounds (UMAP of CLAP vectors) with natural‑language "search by sound."

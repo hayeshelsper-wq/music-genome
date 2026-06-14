@@ -278,6 +278,63 @@ export async function countReports(): Promise<number> {
   }
 }
 
+// ---- Song X-Ray cache (persistent) ----------------------------------------
+// The full per-track analysis (librosa DSP + Essentia tags + lyrics + the Music
+// Flamingo read + the Claude producer breakdown) is expensive — Flamingo alone
+// is a cold GPU. The route-level cache is in-memory only (lost on every cold
+// Cloud Run instance), so we persist completed X-Rays here keyed by artist+title.
+// Once a song is computed with Flamingo, every future view is instant — no GPU.
+
+const XRAY = process.env.XRAY_COLLECTION || "xrayCache";
+
+export function xrayKey(artist: string, title: string): string {
+  return `${artist}|${title}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 256) || "untitled";
+}
+
+export async function getXray(
+  artist: string,
+  title: string
+): Promise<Record<string, unknown> | null> {
+  const snap = await getDb().collection(XRAY).doc(xrayKey(artist, title)).get();
+  return snap.exists ? ((snap.data()?.result as Record<string, unknown>) ?? null) : null;
+}
+
+export async function saveXray(
+  artist: string,
+  title: string,
+  result: Record<string, unknown>,
+  extra: { previewUrl?: string; artwork?: string } = {}
+): Promise<void> {
+  await getDb()
+    .collection(XRAY)
+    .doc(xrayKey(artist, title))
+    .set({
+      artist,
+      title,
+      previewUrl: extra.previewUrl,
+      artwork: extra.artwork,
+      result,
+      savedAt: Date.now(),
+    });
+}
+
+export interface XrayListItem { artist: string; title: string; previewUrl?: string; artwork?: string }
+
+/** Pre-rendered X-Rays for the showcase (metadata only, not the heavy result). */
+export async function listXray(limit = 12): Promise<XrayListItem[]> {
+  const snap = await getDb()
+    .collection(XRAY)
+    .orderBy("savedAt", "desc")
+    .limit(limit)
+    .select("artist", "title", "previewUrl", "artwork")
+    .get();
+  return snap.docs.map((d) => d.data() as XrayListItem);
+}
+
 export type StoreErrorCode = "unconfigured" | "unavailable" | "error";
 
 /** Classify a Firestore failure so the UI shows the right thing: a setup prompt

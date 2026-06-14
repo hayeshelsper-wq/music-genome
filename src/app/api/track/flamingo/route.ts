@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSongMeta, getLyricsText } from "@/lib/genius";
 import { generateTrackReview } from "@/lib/trackReview";
 import { callAudio, callFlamingo } from "@/lib/trackAudio";
+import { saveXray } from "@/lib/store";
 
 // Async Flamingo backfill for the X-ray. When the first paint hit a COLD GPU, the
 // client polls this; the first call warms the GPU (long timeout + audio-service
@@ -57,6 +58,25 @@ export async function GET(req: NextRequest) {
     title,
     artist,
   });
+
+  // Persist the now-complete X-Ray so future views are instant (no GPU).
+  if (audio?.features) {
+    const full = {
+      features: audio.features,
+      chromagram: audio.chromagram ?? null,
+      whisper: { text: audio.lyrics?.text || "" },
+      genius: meta,
+      flamingo,
+      flamingoStatus: "complete",
+      tags: audio.tags ?? null,
+      fullLyrics: lyrics || "",
+      notableLyrics,
+      lyricsSource: notableLyrics.length ? lyricsSource : "none",
+      breakdown,
+      model,
+    };
+    saveXray(artist, title, full, { previewUrl, artwork: meta?.artworkUrl }).catch(() => {});
+  }
 
   return NextResponse.json({
     flamingo,
