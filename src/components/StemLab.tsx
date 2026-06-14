@@ -42,13 +42,26 @@ export default function StemLab({
   const [data, setData] = useState<StemData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [ready, setReady] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState<Record<string, boolean>>({});
   const [solo, setSolo] = useState<string | null>(null);
 
-  const audios = useRef<Record<string, HTMLAudioElement | null>>({});
+  // All stems play through ONE Web Audio clock so they stay sample-accurately in
+  // sync (four independent <audio> elements drift apart). Each stem gets its own
+  // gain node for mute/solo; sources are one-shot and tracked so we can stop them
+  // all together at the end and reset — no element keeps looping on its own.
+  const ctxRef = useRef<AudioContext | null>(null);
+  const buffersRef = useRef<Record<string, AudioBuffer>>({});
+  const gainsRef = useRef<Record<string, GainNode>>({});
+  const sourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const startInfo = useRef<{ ctxStart: number; offset: number }>({ ctxStart: 0, offset: 0 });
+  const posRef = useRef(0);
+  const durationRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
 
+  // fetch the separated stems + analysis
   useEffect(() => {
     let alive = true;
     setData(null);
@@ -71,39 +84,151 @@ export default function StemLab({
     })();
     return () => {
       alive = false;
-      Object.values(audios.current).forEach((a) => a?.pause());
     };
   }, [previewUrl, title, artist]);
 
-  // apply mute/solo to each element
+  function stopSources() {
+    sourcesRef.current.forEach((s) => {
+      try { s.onended = null; s.stop(); } catch {}
+      try { s.disconnect(); } catch {}
+    });
+    sourcesRef.current = [];
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }
+
+  // decode every stem into an AudioBuffer once the URLs arrive
+  useEffect(() => {
+    if (!data?.stems) return;
+    let alive = true;
+    setReady(false);
+    posRef.current = 0;
+    setTime(0);
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    ctxRef.current = ctx;
+    (async () => {
+      try {
+        const entries = STEMS.filter((s) => data.stems[s.key]);
+        const buffers: Record<string, AudioBuffer> = {};
+        const gains: Record<string, GainNode> = {};
+        await Promise.all(
+          entries.map(async (s) => {
+            const res = await fetch(data.stems[s.key]);
+            const ab = await res.arrayBuffer();
+            const buf = await ctx.decodeAudioData(ab);
+            if (!alive) return;
+            buffers[s.key] = buf;
+            const g = ctx.createGain();
+            g.connect(ctx.destination);
+            gains[s.key] = g;
+          })
+        );
+        if (!alive) return;
+        buffersRef.current = buffers;
+        gainsRef.current = gains;
+        const dur = Math.max(0, ...Object.values(buffers).map((b) => b.duration));
+        durationRef.current = dur;
+        setDuration(dur);
+        setReady(true);
+      } catch {
+        if (alive) setError("could not load stem audio");
+      }
+    })();
+    return () => {
+      alive = false;
+      stopSources();
+      buffersRef.current = {};
+      gainsRef.current = {};
+      ctx.close().catch(() => {});
+      ctxRef.current = null;
+      setReady(false);
+      setPlaying(false);
+    };
+  }, [data]);
+
+  // mute/solo → gain
   useEffect(() => {
     for (const { key } of STEMS) {
-      const el = audios.current[key];
-      if (el) el.muted = solo ? key !== solo : !!muted[key];
+      const g = gainsRef.current[key];
+      if (!g) continue;
+      const active = solo ? key === solo : !muted[key];
+      g.gain.value = active ? 1 : 0;
     }
-  }, [muted, solo, data]);
+  }, [muted, solo, ready]);
 
-  const master = () => audios.current["vocals"];
+  const tick = () => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const { ctxStart, offset } = startInfo.current;
+    const dur = durationRef.current;
+    const pos = offset + Math.max(0, ctx.currentTime - ctxStart);
+    if (dur && pos >= dur) {
+      // reached the end: stop everything, rewind, reset the button
+      stopSources();
+      posRef.current = 0;
+      setTime(0);
+      setPlaying(false);
+      return;
+    }
+    posRef.current = pos;
+    setTime(pos);
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  async function startPlayback(offset: number) {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    if (ctx.state === "suspended") await ctx.resume();
+    stopSources();
+    const startTime = ctx.currentTime + 0.06; // tiny lead so all sources fire together
+    const srcs: AudioBufferSourceNode[] = [];
+    for (const { key } of STEMS) {
+      const buf = buffersRef.current[key];
+      const g = gainsRef.current[key];
+      if (!buf || !g) continue;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(g);
+      src.start(startTime, offset);
+      srcs.push(src);
+    }
+    sourcesRef.current = srcs;
+    startInfo.current = { ctxStart: startTime, offset };
+    setPlaying(true);
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+  }
 
   async function togglePlay() {
-    const els = STEMS.map((s) => audios.current[s.key]).filter(Boolean) as HTMLAudioElement[];
+    if (!ready) return;
     if (playing) {
-      els.forEach((a) => a.pause());
+      const ctx = ctxRef.current;
+      if (ctx) {
+        const { ctxStart, offset } = startInfo.current;
+        posRef.current = Math.min(
+          durationRef.current,
+          offset + Math.max(0, ctx.currentTime - ctxStart)
+        );
+      }
+      stopSources();
       setPlaying(false);
     } else {
-      const t = master()?.currentTime ?? 0;
-      els.forEach((a) => (a.currentTime = t)); // resync before starting
-      await Promise.all(els.map((a) => a.play().catch(() => {})));
-      setPlaying(true);
+      const from = posRef.current >= durationRef.current ? 0 : posRef.current;
+      await startPlayback(from);
     }
   }
 
   function seek(t: number) {
-    STEMS.forEach((s) => {
-      const el = audios.current[s.key];
-      if (el) el.currentTime = t;
-    });
-    setTime(t);
+    const dur = durationRef.current || t;
+    const clamped = Math.max(0, Math.min(t, dur));
+    posRef.current = clamped;
+    setTime(clamped);
+    if (playing) startPlayback(clamped); // restart all sources from the new offset
   }
 
   if (error)
@@ -137,32 +262,6 @@ export default function StemLab({
 
   return (
     <div className="stemlab">
-      {/* hidden synced audio elements */}
-      {STEMS.map((s) =>
-        data.stems[s.key] ? (
-          <audio
-            key={s.key}
-            ref={(el) => {
-              audios.current[s.key] = el;
-            }}
-            src={data.stems[s.key]}
-            preload="auto"
-            onLoadedMetadata={(e) => {
-              if (s.key === "vocals") setDuration(e.currentTarget.duration || 0);
-            }}
-            onTimeUpdate={(e) => {
-              if (s.key === "vocals") setTime(e.currentTarget.currentTime);
-            }}
-            onEnded={() => {
-              if (s.key === "vocals") {
-                setPlaying(false);
-                seek(0);
-              }
-            }}
-          />
-        ) : null
-      )}
-
       <div className="stemlab-head">
         <h3>🎛️ Stem Lab — {title}</h3>
         <span className="muted" style={{ fontSize: 12 }}>Demucs source separation</span>
@@ -170,8 +269,14 @@ export default function StemLab({
 
       {/* transport */}
       <div className="stemlab-transport">
-        <button className="stem-play" onClick={togglePlay}>
-          {playing ? "❚❚" : "▶"}
+        <button
+          className="stem-play"
+          onClick={togglePlay}
+          disabled={!ready}
+          aria-label={playing ? "Pause" : "Play"}
+          title={!ready ? "Loading stem audio…" : playing ? "Pause" : "Play"}
+        >
+          {!ready ? "…" : playing ? "❚❚" : "▶"}
         </button>
         <input
           className="stem-seek"
