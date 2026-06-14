@@ -6,9 +6,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# ffmpeg → decode m4a previews; libsndfile → soundfile I/O; curl → fetch models.
+# ffmpeg → decode m4a previews; libsndfile → soundfile I/O; curl → fetch models;
+# rubberband-cli → high-quality time-stretch/pitch-shift for the Mashup Lab.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ffmpeg libsndfile1 curl \
+      ffmpeg libsndfile1 curl rubberband-cli \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

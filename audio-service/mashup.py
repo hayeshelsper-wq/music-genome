@@ -40,16 +40,29 @@ def _nearest_semitones(a_root: int, b_root: int) -> int:
     return d - 12 if d > 6 else d
 
 
-def _conform(stereo: np.ndarray, sr: int, rate: float, n_steps: int) -> np.ndarray:
-    """Time-stretch by `rate` (>1 = faster) then pitch-shift by n_steps, per channel."""
-    chans = []
-    for ch in stereo:
-        y = ch.astype(np.float32)
+def _stretch_shift(y: np.ndarray, sr: int, rate: float, n_steps: int) -> np.ndarray:
+    """Time-stretch (rate>1 = faster) + pitch-shift one mono channel. Prefer
+    Rubber Band (much cleaner on vocals — transient + formant aware); fall back to
+    librosa's phase vocoder if the rubberband binary isn't present."""
+    try:
+        import pyrubberband as pyrb
+
+        if abs(rate - 1.0) > 0.02:
+            y = pyrb.time_stretch(y, sr, rate)
+        if n_steps != 0:
+            y = pyrb.pitch_shift(y, sr, n_steps)
+        return y
+    except Exception:  # noqa: BLE001 — rubberband missing or failed; degrade gracefully
         if abs(rate - 1.0) > 0.02:
             y = librosa.effects.time_stretch(y, rate=rate)
         if n_steps != 0:
             y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_steps)
-        chans.append(y)
+        return y
+
+
+def _conform(stereo: np.ndarray, sr: int, rate: float, n_steps: int) -> np.ndarray:
+    """Conform per channel, then trim channels to a common length."""
+    chans = [_stretch_shift(ch.astype(np.float32), sr, rate, n_steps) for ch in stereo]
     n = min(len(c) for c in chans)
     return np.stack([c[:n] for c in chans])
 
