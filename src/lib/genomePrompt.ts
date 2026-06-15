@@ -10,6 +10,7 @@ export interface Reference {
   features: TrackFeatures;
   tags?: TagSet | null;
   embedding?: number[] | null; // CLAP vector of the reference audio
+  flamingo?: string | null; // Music Flamingo's detailed read of the audio, if available
 }
 
 function top(items: TagItem[] | undefined, n: number): string[] {

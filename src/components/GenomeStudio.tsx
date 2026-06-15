@@ -12,9 +12,19 @@ interface DimScore {
 }
 interface Result {
   prompt: string;
+  promptSource?: "claude+flamingo" | "claude" | "template";
+  promptModel?: string;
+  referenceHeard?: boolean;
   reference: { label: string; artist?: string; kind: string };
   scorecard: { overall: number; dims: DimScore[]; clap: number | null };
   clip: string; // data URL
+}
+
+function promptSourceNote(r: Result): string | null {
+  if (r.promptSource === "claude+flamingo")
+    return "written by Claude from Music Flamingo's read of the track";
+  if (r.promptSource === "claude") return "written by Claude from the measured DNA";
+  return null;
 }
 interface UploadItem {
   id: string;
@@ -76,8 +86,9 @@ export default function GenomeStudio() {
         : "Reading the track's DNA…"
     );
     // Nudge the staged copy along so the long GPU wait feels alive.
-    const t1 = setTimeout(() => setStage("Generating audio on the GPU (MusicGen)…"), 2500);
-    const t2 = setTimeout(() => setStage("Verifying — measuring the generated clip…"), 30000);
+    const t1 = setTimeout(() => setStage("Listening with Music Flamingo + writing the prompt…"), 2500);
+    const t2 = setTimeout(() => setStage("Generating audio on the GPU (MusicGen)…"), 7000);
+    const t3 = setTimeout(() => setStage("Verifying — measuring the generated clip…"), 32000);
     try {
       const res = await fetch("/api/studio/generate", {
         method: "POST",
@@ -100,6 +111,7 @@ export default function GenomeStudio() {
     } finally {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       setBusy(false);
       setStage("");
     }
@@ -210,7 +222,14 @@ export default function GenomeStudio() {
               </div>
               <audio controls src={result.clip} style={{ width: "100%" }} />
               <details className="studio-prompt">
-                <summary>generation prompt</summary>
+                <summary>
+                  generation prompt
+                  {promptSourceNote(result) && (
+                    <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+                      · {promptSourceNote(result)}
+                    </span>
+                  )}
+                </summary>
                 <code>{result.prompt}</code>
               </details>
             </div>

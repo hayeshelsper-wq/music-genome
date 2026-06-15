@@ -12,7 +12,9 @@ import { ingestArtist } from "@/lib/ingest";
 import { getTopTracks } from "@/lib/itunes";
 import { cloudRunAuthHeader } from "@/lib/cloudRun";
 import { generateMusic, analyzeClip } from "@/lib/musicgen";
-import { buildPrompt, scoreDna, Reference } from "@/lib/genomePrompt";
+import { scoreDna, Reference } from "@/lib/genomePrompt";
+import { composeStudioPrompt } from "@/lib/studioPrompt";
+import { callFlamingo } from "@/lib/trackAudio";
 import { TrackFeatures } from "@/lib/trackReview";
 
 export const runtime = "nodejs";
@@ -51,6 +53,10 @@ async function buildReference(source: {
       features: rec.features as TrackFeatures,
       tags: rec.tags,
       embedding,
+      // The upload pipeline already ran Flamingo and stored its read — reuse it
+      // (no extra GPU call) so Claude can write a prompt grounded in what the
+      // track actually sounds like.
+      flamingo: rec.flamingo || null,
     };
   }
   // artist: use a representative top track as the measurable reference.
@@ -63,6 +69,9 @@ async function buildReference(source: {
   if (!top?.previewUrl) throw new Error("no playable tracks for this artist");
   const a = await analyzePreview(top.previewUrl);
   if (!a.features) throw new Error("could not analyze the reference track");
+  // Best-effort Flamingo read of the preview (skipped if the GPU is cold — the
+  // prompt composer falls back to DSP+tags). Never block generation on it.
+  const fl = await callFlamingo(top.previewUrl, { requireWarm: false }).catch(() => ({ text: "" }));
   return {
     label: top.title,
     artist: report.artist.name,
@@ -70,6 +79,7 @@ async function buildReference(source: {
     features: a.features,
     tags: (a as { tags?: Reference["tags"] }).tags ?? null,
     embedding: a.embedding,
+    flamingo: fl.text || null,
   };
 }
 
@@ -104,7 +114,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const reference = await buildReference(source);
-    const prompt = buildPrompt(reference);
+    const { prompt, source: promptSource, model: promptModel } =
+      await composeStudioPrompt(reference);
 
     const wav = await generateMusic(prompt, durationSec);
     const gen = await analyzeClip(wav);
@@ -117,6 +128,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       prompt,
+      promptSource,
+      promptModel,
+      referenceHeard: !!reference.flamingo,
       reference: {
         label: reference.label,
         artist: reference.artist,
