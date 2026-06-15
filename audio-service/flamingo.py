@@ -43,9 +43,15 @@ LOCAL_URL = os.environ.get(
 )
 
 PROMPT = (
-    "Act as a professional music analyst. Describe this track in full detail: "
-    "genre, mood, key, tempo, chords and harmony, instrumentation, production "
-    "style, timbre, vocal characteristics, lyrical themes, and song structure."
+    "Act as a professional music analyst. Listen to the ENTIRE track from start "
+    "to finish and describe it in full detail: genre, mood, key, tempo, chords "
+    "and harmony, instrumentation, production style, timbre, and song structure. "
+    "Be especially precise about two things: (1) VOCALS — state clearly whether a "
+    "human lead vocal is present and, if so, describe it; do NOT assume the track "
+    "is instrumental. (2) EVERY instrument you hear, including any that appear only "
+    "briefly in the intro or in the outro/ending — for example a string instrument "
+    "such as a cello that enters only at the very end. Explicitly describe how the "
+    "ending/outro differs from the rest of the arrangement."
 )
 
 

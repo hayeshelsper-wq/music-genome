@@ -68,11 +68,20 @@ export async function composeStudioPrompt(
 ): Promise<{ prompt: string; model: string; source: PromptSource }> {
   const template = buildPrompt(ref);
 
+  // The discriminative tagger is the reliable word on whether a vocal is present;
+  // the AF-Next captioner sometimes insists a vocal track is "solo instrumental".
+  // When the tagger says vocals are present, override that — and since MusicGen
+  // can't sing, render the vocal as a lead melody line (never tag it instrumental).
+  const vocalPresent = !!ref.tags?.voice?.vocal;
   const facts = [
     `Track to re-create: ${ref.label}${ref.artist ? ` — ${ref.artist}` : ""}`,
     "",
+    vocalPresent
+      ? "VOCAL PRESENCE (authoritative): a reliable vocal detector confirms a LEAD VOCAL is present in this track. Treat it as a vocal song even if the AI listener below calls it instrumental or says there are no vocals — the detector is right about presence. MusicGen cannot sing, so render the vocal as a prominent lead melody line carrying the topline; do NOT describe the track as 'instrumental'."
+      : "",
+    "",
     ref.flamingo
-      ? `AI LISTENER — Music Flamingo's detailed read of the recording (your PRIMARY source — lean on its specifics):\n${String(ref.flamingo).slice(0, 5000)}`
+      ? `AI LISTENER — Music Flamingo's detailed read of the recording (PRIMARY source for HOW things are played, but NOT authoritative on vocal presence — see above):\n${String(ref.flamingo).slice(0, 5000)}`
       : "",
     "",
     tagFacts(ref.tags),

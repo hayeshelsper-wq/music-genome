@@ -15,16 +15,20 @@ const AUDIO_SERVICE = process.env.AUDIO_SERVICE_URL || "http://127.0.0.1:8000";
 // it returns the stored analysis. Driven by the upload page right after upload,
 // and re-triggerable from the library if the page was closed mid-analysis.
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // ?force=1 re-runs the full analysis even if it's already complete — used to
+  // backfill the discriminative tagger (vocals/instruments) on older uploads and
+  // pick up an improved Flamingo prompt.
+  const force = req.nextUrl.searchParams.get("force") === "1";
   try {
     const rec = await getUpload(id);
     if (!rec) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    // Already analyzed → return what's stored (idempotent).
-    if (rec.analysisStatus === "complete" && rec.features) {
+    // Already analyzed → return what's stored (idempotent), unless force.
+    if (!force && rec.analysisStatus === "complete" && rec.features) {
       return NextResponse.json({
         id,
         title: rec.title,

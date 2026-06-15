@@ -69,11 +69,19 @@ export async function generateUploadReview(
   tags?: TagSet | null
 ): Promise<{ breakdown: string; model: string }> {
   const f = features || {};
+  // The discriminative tagger is authoritative on vocal PRESENCE; the AF-Next
+  // listener sometimes calls a vocal track "solo instrumental". When the tagger
+  // says a vocal is present, it wins — never describe the track as instrumental.
+  const vocalPresent = !!tags?.voice?.vocal;
   const facts = [
     `Track: ${title}${artist ? ` — ${artist}` : ""}`,
     "",
+    vocalPresent
+      ? "VOCAL PRESENCE (authoritative): a reliable vocal detector confirms a LEAD VOCAL is present in this recording. If the AI listener below claims the track is instrumental or has no vocals, it is WRONG about that — write the review as a vocal track."
+      : "",
+    "",
     flamingo
-      ? `AI LISTENER — Music Flamingo's detailed read of a representative section (your PRIMARY source — lean on its specifics):\n${String(flamingo).slice(0, 5000)}`
+      ? `AI LISTENER — Music Flamingo's detailed read of a representative section (PRIMARY source for HOW things are played, but NOT authoritative on vocal presence — see above):\n${String(flamingo).slice(0, 5000)}`
       : "",
     "",
     tagFacts(tags),
