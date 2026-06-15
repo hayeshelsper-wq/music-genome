@@ -8,11 +8,14 @@ export const maxDuration = 360; // a cold GPU (image pull + load + inference) is
 // over the shared backfill (also used by the server-side sweep so it finishes even
 // if the user navigates away).
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const res = await backfillUploadFlamingo(id);
+  // ?force=1 re-runs Flamingo even if a read already exists — used to reprocess
+  // older uploads with the new full-track window (was a single 30s window).
+  const force = req.nextUrl.searchParams.get("force") === "1";
+  const res = await backfillUploadFlamingo(id, force ? { force: true } : {});
   if (res.status === "complete")
     return NextResponse.json({
       flamingo: res.flamingo,

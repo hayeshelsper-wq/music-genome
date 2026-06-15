@@ -280,21 +280,23 @@ def segment_song(path: str) -> list:
         return []
 
 
+# AF-Next (the deployed `audio-flamingo-next-captioner-hf`) handles long-form
+# audio — up to 30 min, processed internally in 30s windows. So we feed it the
+# WHOLE track (from the start, intro through outro), not just the loudest 30s,
+# which used to miss anything outside the hook (e.g. a quiet cello outro). Capped
+# at 5 min to bound L4 GPU memory/latency.
+MAX_FLAMINGO_SEC = float(os.environ.get("MUSIC_FLAMINGO_MAX_SEC", "300"))
+
+
 def _flamingo_for_upload(path: str, sections: list, timeout: float = 75.0) -> str:
-    """Run Flamingo on a ~30s representative window (the highest-energy section)
-    of an uploaded track — AF3's encoder is a 30s-window model, so we feed it the
-    hook rather than the whole song. Returns "" on a cold GPU / timeout / error so
-    the upload still completes (graceful, like the X-ray)."""
+    """Run Flamingo on the full uploaded track (capped at MAX_FLAMINGO_SEC) so it
+    hears the whole arrangement, not a single 30s window. `sections` is unused now
+    that we send the entire song. Returns "" on a cold GPU / timeout / error so the
+    upload still completes (graceful, like the X-ray)."""
     try:
         import soundfile as sf
 
-        dur = float(librosa.get_duration(path=path))
-        center = dur / 2.0
-        if sections:
-            peak = max(sections, key=lambda s: s.get("intensity", 0))
-            center = (float(peak["start"]) + float(peak["end"])) / 2.0
-        start = max(0.0, min(center - 15.0, max(0.0, dur - 30.0)))
-        y, sr = librosa.load(path, sr=16000, mono=True, offset=start, duration=30.0)
+        y, sr = librosa.load(path, sr=16000, mono=True, duration=MAX_FLAMINGO_SEC)
         fd, clip = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         try:

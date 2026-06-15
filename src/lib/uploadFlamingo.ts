@@ -18,13 +18,14 @@ export type BackfillResult =
 
 export async function backfillUploadFlamingo(
   id: string,
-  opts: { clipTimeoutMs?: number } = {}
+  opts: { clipTimeoutMs?: number; force?: boolean } = {}
 ): Promise<BackfillResult> {
   try {
     const rec = await getUpload(id);
     if (!rec) return { status: "skip" };
-    // already done
-    if (rec.flamingo && rec.flamingoStatus !== "pending") {
+    // already done — unless force, which re-runs Flamingo from scratch (used to
+    // reprocess older uploads with the new full-track window instead of 30s).
+    if (!opts.force && rec.flamingo && rec.flamingoStatus !== "pending") {
       return { status: "complete", flamingo: rec.flamingo, breakdown: rec.review };
     }
 
