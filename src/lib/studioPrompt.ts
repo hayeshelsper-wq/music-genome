@@ -46,7 +46,7 @@ Trust the sources like a working musician:
 
 Output ONLY the prompt text. No preamble, no quotes, no markdown, no "Prompt:" label.`;
 
-function dspFacts(f: TrackFeatures): string {
+export function dspFacts(f: TrackFeatures): string {
   return [
     "MEASURED (librosa DSP — trust energy/structure; tempo may be octave-off, key is a rough estimate):",
     `- Tempo: ${f.tempo_bpm} BPM (${f.tempo_feel})`,
