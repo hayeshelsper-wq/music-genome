@@ -1,7 +1,10 @@
 # SAM Audio extraction service — CUDA runtime + gated HF weights baked in.
 # Build needs a BuildKit secret `hf_token` whose account accepted the SAM Audio
 # license on HF (facebook/sam-audio-base): HUMAN CHECKPOINT before first build.
-FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+# torch 2.13 pairs with current torchcodec (0.15) — torchcodec's native lib
+# strictly matches its torch release; a mismatch surfaces as a misleading
+# "Could not load libtorchcodec / FFmpeg" error.
+FROM pytorch/pytorch:2.13.0-cuda12.6-cudnn9-runtime
 
 WORKDIR /app
 
