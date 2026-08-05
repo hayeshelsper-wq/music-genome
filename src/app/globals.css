@@ -1400,3 +1400,39 @@ a:hover { text-decoration: underline; }
 .showcase-card-title { font-weight: 700; font-size: 13px; margin-top: 8px; line-height: 1.2; }
 .showcase-card-artist { font-size: 12px; }
 .showcase-now { font-size: 16px; margin: 18px 0 10px; }
+
+/* ---- Genome Studio: optimizer loop ----------------------------------- */
+.studio-mode { margin-top: 14px; }
+.opt-run { margin-top: 22px; }
+.opt-strip { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 14px; margin-bottom: 14px; }
+.opt-sparkline { display: block; }
+.opt-chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border); }
+.opt-chip.running { color: var(--root); border-color: var(--root); }
+.opt-chip.ok { color: var(--influence); border-color: var(--influence); }
+.opt-chip.err { color: var(--descendant); border-color: var(--descendant); }
+.opt-attempts { display: flex; flex-direction: column; gap: 14px; }
+.opt-card { background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.opt-card.best { border-color: var(--influence); box-shadow: 0 0 0 1px var(--influence) inset; }
+.opt-card-head { display: flex; align-items: center; gap: 10px; }
+.opt-dna { font-weight: 800; color: var(--c); font-size: 14px; }
+.opt-best-tag { color: var(--influence); font-size: 12px; font-weight: 700; }
+.opt-prompt code { display: block; background: var(--panel-2); border-radius: 8px;
+  padding: 10px 12px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; }
+.opt-ins { background: rgba(6, 214, 160, 0.18); color: var(--influence);
+  text-decoration: none; border-radius: 3px; padding: 0 1px; }
+.opt-del { background: rgba(239, 71, 111, 0.14); color: var(--descendant);
+  border-radius: 3px; padding: 0 1px; }
+.opt-critique { margin: 0; border-left: 3px solid var(--collab);
+  background: var(--panel-2); border-radius: 0 8px 8px 0; padding: 10px 14px;
+  font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.opt-critique ul { margin: 8px 0 0; padding-left: 18px; }
+.studio-runs { margin-top: 28px; }
+.studio-runs h3 { font-size: 16px; margin: 0 0 10px; }
+.studio-run-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px;
+  color: var(--text); text-decoration: none; transition: border-color 0.15s; }
+.studio-run-row:hover { border-color: var(--collab); }

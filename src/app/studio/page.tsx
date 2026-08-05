@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import GenomeStudio from "@/components/GenomeStudio";
 
 export const metadata = {
@@ -7,7 +8,10 @@ export const metadata = {
 export default function StudioPage() {
   return (
     <div className="container">
-      <GenomeStudio />
+      {/* GenomeStudio reads ?run= via useSearchParams — needs a boundary. */}
+      <Suspense>
+        <GenomeStudio />
+      </Suspense>
     </div>
   );
 }

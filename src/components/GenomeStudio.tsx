@@ -1,22 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { diffWords } from "diff";
 import { ArtistRef } from "@/lib/types";
+import { streamNdjson } from "@/lib/ndjson";
+import ScorecardView, { ScorecardData, scoreColor } from "./ScorecardView";
 
-interface DimScore {
-  label: string;
-  target: string;
-  achieved: string;
-  score: number;
-  detail?: string;
-}
 interface Result {
   prompt: string;
   promptSource?: "claude+flamingo" | "claude" | "template";
   promptModel?: string;
   referenceHeard?: boolean;
   reference: { label: string; artist?: string; kind: string };
-  scorecard: { overall: number; dims: DimScore[]; clap: number | null };
+  scorecard: ScorecardData;
   clip: string; // data URL
 }
 
@@ -33,14 +30,111 @@ interface UploadItem {
   tempo?: number;
 }
 
-function scoreColor(s: number): string {
-  if (s >= 75) return "var(--influence)";
-  if (s >= 45) return "var(--root)";
-  return "var(--descendant)";
+// One optimizer attempt as accumulated from the NDJSON stream (all fields
+// arrive incrementally: attempt → audio → score → critique).
+interface OptAttempt {
+  i: number;
+  prompt: string;
+  promptSource: string;
+  url?: string;
+  scorecard?: ScorecardData;
+  dnaMatch?: number;
+  critique?: { analysis: string; changes: string[] };
+}
+
+interface RunSummary {
+  id: string;
+  createdAt: number;
+  engine: string;
+  referenceLabel: string;
+  status: string;
+  stopReason?: string;
+  attemptCount: number;
+  best: number;
+}
+
+type OptStatus = "idle" | "running" | "done" | "error";
+
+function PromptDiff({ prev, curr }: { prev: string | null; curr: string }) {
+  if (!prev) return <code>{curr}</code>;
+  const parts = diffWords(prev, curr);
+  return (
+    <code>
+      {parts.map((p, i) =>
+        p.added ? (
+          <ins key={i} className="opt-ins">
+            {p.value}
+          </ins>
+        ) : p.removed ? (
+          <del key={i} className="opt-del">
+            {p.value}
+          </del>
+        ) : (
+          <span key={i}>{p.value}</span>
+        )
+      )}
+    </code>
+  );
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length === 0) return null;
+  const W = 180;
+  const H = 40;
+  const pts = values
+    .map((v, i) => {
+      const x = values.length === 1 ? W / 2 : (i / (values.length - 1)) * (W - 8) + 4;
+      const y = H - 4 - (Math.max(0, Math.min(100, v)) / 100) * (H - 8);
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const last = values[values.length - 1];
+  return (
+    <svg
+      className="opt-sparkline"
+      viewBox={`0 0 ${W} ${H}`}
+      width={W}
+      height={H}
+      aria-label={`DNA match per attempt: ${values.join(", ")}`}
+    >
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={scoreColor(last)}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {values.map((v, i) => {
+        const x = values.length === 1 ? W / 2 : (i / (values.length - 1)) * (W - 8) + 4;
+        const y = H - 4 - (Math.max(0, Math.min(100, v)) / 100) * (H - 8);
+        return <circle key={i} cx={x} cy={y} r="3" fill={scoreColor(v)} />;
+      })}
+    </svg>
+  );
+}
+
+function statusChip(status: OptStatus, stopReason: string | null): { label: string; cls: string } {
+  if (status === "running") return { label: "optimizing…", cls: "running" };
+  if (status === "error") return { label: "stream failed", cls: "err" };
+  if (status === "done") {
+    const reason: Record<string, string> = {
+      threshold: "hit the DNA threshold",
+      plateau: "plateaued",
+      max_iters: "attempt limit reached",
+      critic_error: "critic failed — kept the best attempt",
+    };
+    return { label: reason[stopReason || ""] || "done", cls: "ok" };
+  }
+  return { label: "", cls: "" };
 }
 
 export default function GenomeStudio() {
+  const searchParams = useSearchParams();
+  const viewRunId = searchParams.get("run");
+
   const [mode, setMode] = useState<"artist" | "track">("artist");
+  const [runMode, setRunMode] = useState<"oneshot" | "optimize">("oneshot");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<ArtistRef[]>([]);
@@ -51,12 +145,56 @@ export default function GenomeStudio() {
   const [result, setResult] = useState<Result | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Optimize-mode state.
+  const [attempts, setAttempts] = useState<OptAttempt[]>([]);
+  const [optStatus, setOptStatus] = useState<OptStatus>("idle");
+  const [stopReason, setStopReason] = useState<string | null>(null);
+  const [bestAttempt, setBestAttempt] = useState<number | null>(null);
+  const [optError, setOptError] = useState("");
+  const [pastRuns, setPastRuns] = useState<RunSummary[]>([]);
+  const [viewingRun, setViewingRun] = useState<{ label: string; engine: string } | null>(null);
+
   useEffect(() => {
     fetch("/api/uploads")
       .then((r) => r.json())
       .then((d) => setUploads(d.items || []))
       .catch(() => {});
+    fetch("/api/studio/runs")
+      .then((r) => r.json())
+      .then((d) => setPastRuns(d.runs || []))
+      .catch(() => {});
   }, []);
+
+  // Read-only view of a past run (?run=<id>).
+  useEffect(() => {
+    if (!viewRunId) return;
+    fetch(`/api/studio/runs?id=${encodeURIComponent(viewRunId)}`)
+      .then((r) => r.json())
+      .then((run) => {
+        if (run.error) {
+          setOptError(run.error);
+          return;
+        }
+        setRunMode("optimize");
+        setViewingRun({ label: run.referenceLabel, engine: run.engine });
+        setAttempts(
+          (run.attempts || []).map(
+            (a: OptAttempt & { url?: string; critique?: string | null }) => ({
+              i: a.i,
+              prompt: a.prompt,
+              promptSource: a.promptSource,
+              url: a.url,
+              scorecard: a.scorecard,
+              dnaMatch: a.dnaMatch,
+            })
+          )
+        );
+        setOptStatus(run.status === "error" ? "error" : "done");
+        setStopReason(run.stopReason || null);
+        setBestAttempt(run.bestAttempt ?? null);
+      })
+      .catch(() => setOptError("could not load run"));
+  }, [viewRunId]);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -116,6 +254,97 @@ export default function GenomeStudio() {
       setStage("");
     }
   }
+
+  const optimize = useCallback(async () => {
+    if (!picked || busy) return;
+    setBusy(true);
+    setViewingRun(null);
+    setOptError("");
+    setAttempts([]);
+    setStopReason(null);
+    setBestAttempt(null);
+    setOptStatus("running");
+
+    const patchAttempt = (i: number, fn: (a: OptAttempt) => OptAttempt) =>
+      setAttempts((prev) => prev.map((a) => (a.i === i ? fn(a) : a)));
+
+    await streamNdjson(
+      "/api/studio/optimize",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source:
+            picked.kind === "artist"
+              ? { kind: "artist", mbid: picked.mbid }
+              : { kind: "track", id: picked.id },
+        }),
+      },
+      (obj) => {
+        const ev = obj as Record<string, unknown> & { t?: string; i?: number };
+        switch (ev.t) {
+          case "run":
+            break;
+          case "attempt":
+            setAttempts((prev) => [
+              ...prev,
+              {
+                i: ev.i as number,
+                prompt: String(ev.prompt || ""),
+                promptSource: String(ev.promptSource || ""),
+              },
+            ]);
+            break;
+          case "audio":
+            patchAttempt(ev.i as number, (a) => ({ ...a, url: String(ev.url || "") }));
+            break;
+          case "score":
+            patchAttempt(ev.i as number, (a) => ({
+              ...a,
+              scorecard: ev.scorecard as ScorecardData,
+              dnaMatch: ev.dnaMatch as number,
+            }));
+            break;
+          case "critique":
+            patchAttempt(ev.i as number, (a) => ({
+              ...a,
+              critique: {
+                analysis: String(ev.analysis || ""),
+                changes: Array.isArray(ev.changes) ? (ev.changes as string[]) : [],
+              },
+            }));
+            break;
+          case "done":
+            setOptStatus("done");
+            setStopReason(String(ev.stopReason || ""));
+            setBestAttempt(typeof ev.bestAttempt === "number" ? ev.bestAttempt : null);
+            break;
+          case "error":
+            setOptStatus("error");
+            setOptError(String(ev.message || "optimize failed"));
+            break;
+        }
+      },
+      () => {
+        setOptStatus((s) => (s === "running" ? "error" : s));
+        setBusy(false);
+        fetch("/api/studio/runs")
+          .then((r) => r.json())
+          .then((d) => setPastRuns(d.runs || []))
+          .catch(() => {});
+      },
+      (e) => {
+        setOptStatus("error");
+        setOptError(e.message);
+        setBusy(false);
+      }
+    );
+  }, [picked, busy]);
+
+  const chip = statusChip(optStatus, stopReason);
+  const dnaSeries = attempts
+    .filter((a) => typeof a.dnaMatch === "number")
+    .map((a) => a.dnaMatch as number);
 
   return (
     <div className="studio">
@@ -190,22 +419,110 @@ export default function GenomeStudio() {
           </div>
         )}
 
+        <div className="studio-tabs studio-mode">
+          <button
+            className={`studio-tab ${runMode === "oneshot" ? "on" : ""}`}
+            onClick={() => setRunMode("oneshot")}
+          >
+            One shot
+          </button>
+          <button
+            className={`studio-tab ${runMode === "optimize" ? "on" : ""}`}
+            onClick={() => setRunMode("optimize")}
+          >
+            Optimize
+          </button>
+        </div>
+
         <button
           className="btn studio-go"
           disabled={!picked || busy}
-          onClick={generate}
+          onClick={runMode === "optimize" ? optimize : generate}
         >
-          {busy ? "Working…" : picked ? `🧬 Generate in the DNA of ${picked.label}` : "Pick a source"}
+          {busy
+            ? "Working…"
+            : picked
+            ? runMode === "optimize"
+              ? `🔁 Optimize toward ${picked.label}`
+              : `🧬 Generate in the DNA of ${picked.label}`
+            : "Pick a source"}
         </button>
-        {busy && stage && (
+        {busy && runMode === "oneshot" && stage && (
           <div className="studio-stage muted">
             <span className="spinner" /> &nbsp;{stage}
           </div>
         )}
-        {error && <div className="studio-error">⚠️ {error}</div>}
+        {error && runMode === "oneshot" && <div className="studio-error">⚠️ {error}</div>}
       </div>
 
-      {result && (
+      {runMode === "optimize" && (optStatus !== "idle" || optError) && (
+        <div className="opt-run">
+          <div className="opt-strip">
+            {viewingRun && (
+              <span className="muted">
+                Past run — <strong>{viewingRun.label}</strong> ({viewingRun.engine})
+              </span>
+            )}
+            <Sparkline values={dnaSeries} />
+            {chip.label && <span className={`opt-chip ${chip.cls}`}>{chip.label}</span>}
+            {optStatus === "running" && <span className="spinner" />}
+          </div>
+          {optError && <div className="studio-error">⚠️ {optError}</div>}
+
+          <div className="opt-attempts">
+            {attempts.map((a, idx) => (
+              <div
+                key={a.i}
+                className={`opt-card ${bestAttempt === a.i && optStatus === "done" ? "best" : ""}`}
+              >
+                <div className="opt-card-head">
+                  <strong>Attempt {a.i + 1}</strong>
+                  {typeof a.dnaMatch === "number" ? (
+                    <span
+                      className="opt-dna"
+                      style={{ ["--c" as string]: scoreColor(a.dnaMatch) }}
+                    >
+                      {a.dnaMatch} DNA
+                    </span>
+                  ) : (
+                    <span className="muted">
+                      <span className="spinner" /> generating &amp; measuring…
+                    </span>
+                  )}
+                  {bestAttempt === a.i && optStatus === "done" && (
+                    <span className="opt-best-tag">★ best</span>
+                  )}
+                </div>
+                <div className="opt-prompt">
+                  <PromptDiff prev={idx > 0 ? attempts[idx - 1].prompt : null} curr={a.prompt} />
+                </div>
+                {a.url && <audio controls src={a.url} preload="none" style={{ width: "100%" }} />}
+                {a.scorecard && <ScorecardView dims={a.scorecard.dims} />}
+                {a.critique && (
+                  <blockquote className="opt-critique">
+                    <div>{a.critique.analysis}</div>
+                    {a.critique.changes.length > 0 && (
+                      <ul>
+                        {a.critique.changes.map((c, j) => (
+                          <li key={j}>{c}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </blockquote>
+                )}
+              </div>
+            ))}
+            {optStatus === "running" && attempts.length === 0 && (
+              <div className="muted">
+                <span className="spinner" /> &nbsp;Reading the reference DNA + writing the first
+                prompt…
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {result && runMode === "oneshot" && (
         <div className="studio-result">
           <div className="studio-score">
             <div
@@ -235,37 +552,26 @@ export default function GenomeStudio() {
             </div>
           </div>
 
-          <table className="studio-table">
-            <thead>
-              <tr>
-                <th>Dimension</th>
-                <th>Target</th>
-                <th>Generated</th>
-                <th>Match</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.scorecard.dims.map((d) => (
-                <tr key={d.label}>
-                  <td>{d.label}</td>
-                  <td>{d.target}</td>
-                  <td>{d.achieved}</td>
-                  <td>
-                    <div className="studio-bar-wrap">
-                      <div
-                        className="studio-bar"
-                        style={{ width: `${d.score}%`, background: scoreColor(d.score) }}
-                      />
-                      <span>{d.score}</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ScorecardView dims={result.scorecard.dims} />
           <button className="btn-mini ghost" disabled={busy} onClick={generate}>
             ↻ Generate again
           </button>
+        </div>
+      )}
+
+      {pastRuns.length > 0 && (
+        <div className="studio-runs">
+          <h3>Past runs</h3>
+          {pastRuns.map((r) => (
+            <a key={r.id} className="studio-run-row" href={`/studio?run=${r.id}`}>
+              <strong>{r.referenceLabel}</strong>
+              <span className="muted">
+                {r.attemptCount} attempt{r.attemptCount === 1 ? "" : "s"} · best {r.best} ·{" "}
+                {r.engine}
+                {r.status === "error" ? " · ⚠️ error" : ""}
+              </span>
+            </a>
+          ))}
         </div>
       )}
     </div>
