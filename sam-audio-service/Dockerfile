@@ -11,12 +11,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsndfile1 git && rm -rf /var/lib/apt/lists/*
 
+# The 2.13 images use a PEP 668-managed system Python (no conda) — apt's
+# FFmpeg shared libs are on the default loader path, which is exactly what
+# torchcodec dlopens.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# torchcodec (a sam-audio dep) dlopens FFmpeg SHARED LIBS; the conda env's
-# loader path doesn't see apt's ffmpeg, so install FFmpeg into conda too.
-RUN conda install -y -c conda-forge "ffmpeg=6" && conda clean -afy
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 ENV HF_HOME=/models
 ARG SAM_AUDIO_MODEL=facebook/sam-audio-base
