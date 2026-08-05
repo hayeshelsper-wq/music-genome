@@ -1457,3 +1457,25 @@ a:hover { text-decoration: underline; }
 .extract-span-playhead { position: absolute; top: 0; bottom: 0; width: 1.5px;
   background: rgba(255,255,255,0.55); }
 .stem-row.extra .stem-name { color: #c792ea; }
+
+/* ---- Hum to Genome ---------------------------------------------------- */
+.hum-page { max-width: 780px; margin: 0 auto; }
+.hum-step { background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+.hum-step h3 { margin: 0 0 12px; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.hum-step-num { display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%; background: var(--panel-2);
+  border: 1px solid var(--border); font-size: 13px; }
+.hum-recording { display: flex; align-items: center; gap: 14px; }
+.hum-meter { flex: 1; height: 10px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.hum-meter-fill { height: 100%; background: linear-gradient(90deg, var(--influence), var(--root), var(--descendant));
+  transition: width 0.08s linear; }
+.hum-roll-controls { display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.hum-map { border-radius: 10px; background: var(--panel-2); }
+.hum-neighbors { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.hum-verify { display: flex; align-items: center; gap: 8px; font-size: 13px;
+  color: var(--muted); margin-bottom: 10px; }
+.hum-styles { display: flex; gap: 12px; flex-wrap: wrap; }
+.hum-style-card { min-width: 150px; }
+.hum-productions { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }

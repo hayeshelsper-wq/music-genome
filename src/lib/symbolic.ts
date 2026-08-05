@@ -5,6 +5,7 @@
 import { cloudRunAuthHeader } from "./cloudRun";
 import { getSymbolic, saveSymbolic, SymbolicMelody, xrayKey } from "./store";
 import { MelodicDna } from "./types";
+import type { Scorecard } from "./genomePrompt";
 
 const AUDIO_SERVICE = process.env.AUDIO_SERVICE_URL || "http://127.0.0.1:8000";
 
@@ -114,4 +115,53 @@ export function melodicSimilarity(a: MelodicDna, b: MelodicDna): number {
     0.25 * cos(a.pitch_class_dist, b.pitch_class_dist) +
     0.25 * cos(a.rhythm_hist, b.rhythm_hist);
   return Math.max(0, Math.min(1, s));
+}
+
+/** Render a note list to audio via the audio-service (fluidsynth GM piano in
+ *  prod, sine synthesis locally). */
+export async function renderMidi(
+  notes: SymbolicMelody["notes"],
+  bpm: number | null,
+  program = 0
+): Promise<{ wav: Buffer; sr: number }> {
+  const auth = await cloudRunAuthHeader(AUDIO_SERVICE);
+  const res = await fetch(`${AUDIO_SERVICE}/render-midi`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...auth },
+    body: JSON.stringify({ notes, bpm, program }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`audio-service /render-midi ${res.status}`);
+  const j = (await res.json()) as { error?: string; wav_b64?: string; sr?: number };
+  if (j.error || !j.wav_b64) throw new Error(j.error || "render failed");
+  return { wav: Buffer.from(j.wav_b64, "base64"), sr: j.sr || 44100 };
+}
+
+/** Hum-production scorecard: like scoreDna's, but the CLAP row is replaced by
+ *  melodic fidelity (did the generation keep the hummed melody?) — CLAP against
+ *  a fluidsynth piano render is meaningless for timbre. */
+export function scoreHumFidelity(base: Scorecard, melodicSim: number): Scorecard {
+  const dims = base.dims.filter((d) => d.label !== "Sonic similarity (CLAP)");
+  dims.push({
+    label: "Melodic fidelity",
+    target: "1.00",
+    achieved: melodicSim.toFixed(2),
+    score: Math.max(0, Math.round(melodicSim * 100)),
+    detail: "hummed melody vs transcribed generation",
+  });
+  const weights: Record<string, number> = {
+    "Melodic fidelity": 3,
+    Tempo: 2,
+    Key: 2,
+    Brightness: 1,
+    "Rhythmic density": 1,
+  };
+  let wsum = 0,
+    acc = 0;
+  for (const d of dims) {
+    const w = weights[d.label] ?? 1;
+    acc += d.score * w;
+    wsum += w;
+  }
+  return { overall: wsum ? Math.round(acc / wsum) : 0, dims, clap: base.clap };
 }
