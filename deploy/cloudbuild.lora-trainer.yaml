@@ -1,0 +1,27 @@
+# Builds the LoRA trainer job image (ACE-Step + training extras + GCP clients).
+# One-time job creation (HUMAN CHECKPOINT — run once):
+#   gcloud run jobs create lora-trainer \
+#     --image ${_AR}/lora-trainer:latest --region us-central1 \
+#     --gpu 1 --gpu-type nvidia-l4 --cpu 8 --memory 24Gi \
+#     --task-timeout 3600 --max-retries 0 \
+#     --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT_ID
+# Its service account needs: storage read on the uploads bucket, storage write
+# on the loras/ prefix, and roles/datastore.user.
+substitutions:
+  _AR: ""        # e.g. us-central1-docker.pkg.dev/PROJECT/music-genome
+  _TAG: "latest"
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - "build"
+      - "-t"
+      - "${_AR}/lora-trainer:${_TAG}"
+      - "-f"
+      - "lora-trainer/Dockerfile"
+      - "lora-trainer"
+images:
+  - "${_AR}/lora-trainer:${_TAG}"
+options:
+  diskSizeGb: 200
+  machineType: E2_HIGHCPU_8
+timeout: 3600s
