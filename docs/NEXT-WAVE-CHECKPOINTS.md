@@ -41,6 +41,22 @@ agent during the V2 build (2026‑08‑05); ⬜ items need you.
   `CROSSFADE_TOKEN_SECRET` (secret mount). The agent wires whatever deployed
   successfully during its deploy pass; re‑check `gcloud run services describe`.
 
+## Deploy findings (2026‑08‑05 live QA)
+- ✅ Fixed live: IPv6‑first DNS broke MusicBrainz on Cloud Run
+  (`NODE_OPTIONS=--dns-result-order=ipv4first` on `web`).
+- ✅ Crossfader architecture correction: the audio-service is IAM‑gated in
+  prod, so a second public service **`audio-ws`** (same image,
+  `PUBLIC_WS_ONLY=1` — only `/mrt/session` + `/health` reachable) fronts the
+  browser; `NEXT_PUBLIC_AUDIO_WS` bakes its URL into the web bundle.
+- ✅ MRT memory: JAX + MusicCoCa‑TF fight over the L4 →
+  `XLA_PYTHON_CLIENT_MEM_FRACTION=0.55, TF_FORCE_GPU_ALLOW_GROWTH=true`.
+- ⬜ **acestep image bake is incomplete**: the handler downloads the actual
+  DiT/LM checkpoints (~10GB across several HF repos) at cold start, which
+  scale‑to‑zero re‑pays every time. Interim: `HF_TOKEN` + `--no-cpu-throttling`
+  on the service. Proper fix: identify the exact repos the
+  `acestep-v15-turbo` config resolves and bake them (or mount a GCS volume
+  like the flamingo `-nobake` pattern).
+
 ## Live checks
 - ⬜ Crossfader latency: if slider→ear exceeds ~2s on the live L4, set
   `CHUNK_S=1.0` on `mrt` and re‑evaluate.
