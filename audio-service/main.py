@@ -642,6 +642,59 @@ async def transcribe_symbolic(request: Request):
                 os.unlink(p)
 
 
+class RenderMidiReq(BaseModel):
+    notes: list  # [{p,s,e,v}]
+    program: int = 0  # GM program (0 = acoustic grand)
+    bpm: Optional[float] = None
+
+
+@app.post("/render-midi")
+def render_midi(req: RenderMidiReq):
+    """Render a note list to audio (base64 WAV). Prefers fluidsynth + the baked
+    GM soundfont; falls back to pretty_midi's sine synthesis when fluidsynth
+    isn't installed (local dev), which is still plenty for CLAP embedding."""
+    try:
+        import base64 as b64mod
+        import io as iomod
+
+        import pretty_midi
+        import soundfile as sf
+
+        pm = pretty_midi.PrettyMIDI(initial_tempo=float(req.bpm) if req.bpm else 120.0)
+        inst = pretty_midi.Instrument(program=int(req.program))
+        for n in req.notes:
+            if n["e"] <= n["s"]:
+                continue
+            inst.notes.append(
+                pretty_midi.Note(
+                    velocity=int(n.get("v", 90)),
+                    pitch=int(n["p"]),
+                    start=float(n["s"]),
+                    end=float(n["e"]),
+                )
+            )
+        pm.instruments.append(inst)
+        if not inst.notes:
+            return {"error": "no notes to render"}
+
+        sf2 = os.environ.get("SOUNDFONT_PATH", "/app/soundfont.sf3")
+        wav = None
+        if os.path.exists(sf2):
+            try:
+                wav = pm.fluidsynth(fs=44100, sf2_path=sf2)
+            except Exception:  # noqa: BLE001 — fall through to sine synthesis
+                wav = None
+        if wav is None:
+            wav = pm.synthesize(fs=44100)
+        peak = float(np.max(np.abs(wav))) or 1.0
+        wav = (wav / peak * 0.9).astype(np.float32)
+        buf = iomod.BytesIO()
+        sf.write(buf, wav, 44100, format="WAV", subtype="PCM_16")
+        return {"wav_b64": b64mod.b64encode(buf.getvalue()).decode(), "sr": 44100}
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:200]}
+
+
 @app.post("/flamingo-clip")
 async def flamingo_clip(file: UploadFile = File(...)):
     """Async backfill: run Flamingo on a representative window of an uploaded

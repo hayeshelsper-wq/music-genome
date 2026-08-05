@@ -7,13 +7,19 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # ffmpeg → decode m4a previews; libsndfile → soundfile I/O; curl → fetch models;
-# rubberband-cli → high-quality time-stretch/pitch-shift for the Mashup Lab.
+# rubberband-cli → high-quality time-stretch/pitch-shift for the Mashup Lab;
+# fluidsynth → render transcribed/hummed MIDI to audio (Hum-to-Genome).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ffmpeg libsndfile1 curl rubberband-cli \
+      ffmpeg libsndfile1 curl rubberband-cli fluidsynth \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt pyfluidsynth
+
+# ---- small GM soundfont for /render-midi (FluidR3Mono, ~15MB sf3) ----
+ENV SOUNDFONT_PATH=/app/soundfont.sf3
+RUN curl -fsSL -o /app/soundfont.sf3 \
+    https://github.com/musescore/MuseScore/raw/master/share/sound/FluidR3Mono_GM.sf3
 
 # ---- bake the discriminative tagger models (Essentia Discogs-EffNet embedding +
 #      MTG-Jamendo instrument/genre/mood heads + voice/instrumental). ~100MB. ----
