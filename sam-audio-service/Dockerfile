@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# torchcodec (a sam-audio dep) dlopens FFmpeg SHARED LIBS; the conda env's
+# loader path doesn't see apt's ffmpeg, so install FFmpeg into conda too.
+RUN conda install -y -c conda-forge "ffmpeg=6" && conda clean -afy
+
 ENV HF_HOME=/models
 ARG SAM_AUDIO_MODEL=facebook/sam-audio-base
 ENV SAM_AUDIO_MODEL=${SAM_AUDIO_MODEL}
