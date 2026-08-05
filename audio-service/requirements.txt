@@ -17,4 +17,5 @@ pyrubberband>=0.3   # Mashup Lab: HQ time-stretch/pitch-shift (wraps the rubberb
 basic-pitch[onnx]>=0.4.0  # Symbolic layer (V2): polyphonic transcription. ONNX extra keeps the
                           # image slim — on Linux/py3.10 the base install would pull full TF.
 pretty_midi>=0.2.10       # note lists <-> .mid (basic-pitch already depends on it; pin explicitly)
+websockets>=12            # crossfader: dial the private mrt-service WS from the browser proxy
 # torch + torchaudio come with demucs; on Apple Silicon they use the MPS GPU

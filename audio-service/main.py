@@ -21,9 +21,11 @@ import urllib.request
 import warnings
 from typing import Optional
 
+import asyncio
+
 import librosa
 import numpy as np
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import FastAPI, File, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -693,6 +695,122 @@ def render_midi(req: RenderMidiReq):
         return {"wav_b64": b64mod.b64encode(buf.getvalue()).decode(), "sr": 44100}
     except Exception as e:  # noqa: BLE001
         return {"error": str(e)[:200]}
+
+
+class ClipReq(BaseModel):
+    previewUrl: str
+    seconds: float = 10.0
+
+
+@app.post("/clip")
+def clip_center(req: ClipReq):
+    """Center-cut of a preview as WAV b64 — bounds the crossfader's style-anchor
+    init payload (MusicCoCa only needs ~10s to embed a style)."""
+    path = None
+    try:
+        import soundfile as sf
+
+        path = _download(req.previewUrl)
+        dur = librosa.get_duration(path=path)
+        secs = max(2.0, min(30.0, float(req.seconds or 10)))
+        offset = max(0.0, (dur - secs) / 2)
+        y, sr = librosa.load(path, sr=None, mono=True, offset=offset, duration=secs)
+        buf = io.BytesIO()
+        sf.write(buf, y, sr, format="WAV", subtype="PCM_16")
+        return {"wav_b64": base64.b64encode(buf.getvalue()).decode(), "sr": sr}
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:200]}
+    finally:
+        if path and os.path.exists(path):
+            os.unlink(path)
+
+
+# ---- crossfader WS proxy ----------------------------------------------------
+# App Router route handlers can't hold a WebSocket, so the browser dials this
+# service (it already fronts the browser for /stemfiles). We validate the web
+# app's short-lived HMAC token, then bridge to the private mrt-service with a
+# metadata-server ID token (the Python port of cloudRun.ts, local no-op).
+
+def _gcp_id_token(audience: str) -> Optional[str]:
+    try:
+        import httpx
+
+        r = httpx.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/"
+            f"service-accounts/default/identity?audience={audience}",
+            headers={"Metadata-Flavor": "Google"},
+            timeout=1.5,
+        )
+        return r.text if r.status_code == 200 else None
+    except Exception:  # noqa: BLE001 — local dev: no metadata server
+        return None
+
+
+@app.websocket("/mrt/session")
+async def mrt_session_proxy(ws: WebSocket):
+    import crossfade_token
+
+    secret = os.environ.get("CROSSFADE_TOKEN_SECRET", "")
+    token = ws.query_params.get("token", "")
+    # Local dev with no secret configured runs open (matches the web app's
+    # middleware, which disables auth when the password pair is unset).
+    if secret and not crossfade_token.verify_token(token, secret):
+        await ws.close(code=4401, reason="unauthorized")
+        return
+
+    mrt_ws_url = os.environ.get("MRT_WS_URL", "")
+    if not mrt_ws_url:
+        await ws.accept()
+        await ws.send_text('{"type":"error","message":"MRT_WS_URL not configured"}')
+        await ws.close(code=1011, reason="unconfigured")
+        return
+
+    audience = mrt_ws_url.replace("wss://", "https://").replace("ws://", "http://")
+    audience = "/".join(audience.split("/")[:3])
+    headers = {}
+    id_token = _gcp_id_token(audience)
+    if id_token:
+        headers["Authorization"] = f"Bearer {id_token}"
+
+    await ws.accept()
+    try:
+        import websockets
+
+        async with websockets.connect(
+            mrt_ws_url, additional_headers=headers, max_size=None
+        ) as upstream:
+
+            async def client_to_mrt():
+                while True:
+                    msg = await ws.receive()
+                    if msg["type"] == "websocket.disconnect":
+                        return
+                    if msg.get("text") is not None:
+                        await upstream.send(msg["text"])
+                    elif msg.get("bytes") is not None:
+                        await upstream.send(msg["bytes"])
+
+            async def mrt_to_client():
+                async for m in upstream:
+                    if isinstance(m, (bytes, bytearray)):
+                        await ws.send_bytes(bytes(m))
+                    else:
+                        await ws.send_text(m)
+
+            tasks = [
+                asyncio.create_task(client_to_mrt()),
+                asyncio.create_task(mrt_to_client()),
+            ]
+            _done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+    except Exception:  # noqa: BLE001 — either side dropping ends the session
+        pass
+    finally:
+        try:
+            await ws.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @app.post("/flamingo-clip")

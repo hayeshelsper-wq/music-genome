@@ -61,6 +61,42 @@ export function dspFacts(f: TrackFeatures): string {
 
 export type PromptSource = "claude+flamingo" | "claude" | "template";
 
+/** Terse comma-separated style tags (≤20 words) from a cached artist sonic
+ *  fingerprint — MRT's MusicCoCa prefers tags to prose. Deterministic, no LLM. */
+export function styleTagsFromSonic(s: {
+  name?: string;
+  tempo_bpm?: number;
+  brightness?: string;
+  texture?: string;
+  density?: string;
+  dynamics?: string;
+  energy_shape?: string;
+  key?: string;
+}): string {
+  const tempoWord = s.tempo_bpm
+    ? s.tempo_bpm < 85
+      ? "slow"
+      : s.tempo_bpm < 115
+      ? "mid-tempo"
+      : "uptempo"
+    : "";
+  return [
+    s.name ? `in the style of ${s.name}` : "",
+    tempoWord,
+    s.tempo_bpm ? `${Math.round(s.tempo_bpm)} bpm` : "",
+    s.brightness,
+    s.texture?.split("/")[0]?.trim(),
+    s.density ? `${s.density} rhythms` : "",
+    s.dynamics?.split("/")[0]?.trim(),
+    s.key ? `key of ${s.key}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ")
+    .split(/\s+/)
+    .slice(0, 20)
+    .join(" ");
+}
+
 const ACESTEP_SYSTEM = `You prepare inputs for ACE-Step, a full-song text-to-music model that takes STYLE TAGS and LYRICS. You are given a detailed analysis of a reference recording.
 
 Rules:
