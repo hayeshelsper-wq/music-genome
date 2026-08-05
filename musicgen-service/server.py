@@ -118,10 +118,12 @@ def generate(req: GenerateReq):
             melody = melody.mean(axis=1)
         # upstream: huggingface/transformers feature_extraction_musicgen_melody.py —
         # the processor resamples to its 32kHz chroma extractor when the passed
-        # sampling_rate differs, so we hand it the true source rate.
+        # sampling_rate differs. Its internal torch.arange/resample path rejects
+        # numpy input (dtype=numpy Float32DType TypeError) — hand it a tensor.
+        melody_t = torch.from_numpy(melody.copy())
         inputs = _proc(
             text=[req.prompt],
-            audio=melody,
+            audio=melody_t,
             sampling_rate=int(melody_sr),
             padding=True,
             return_tensors="pt",
