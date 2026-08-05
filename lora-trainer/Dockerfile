@@ -7,9 +7,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsndfile1 git && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir \
-    "git+https://github.com/ace-step/ACE-Step-1.5@6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0" \
-    google-cloud-firestore google-cloud-storage
+# nano-vllm is vendored inside the repo — install it first (see acestep-service).
+RUN git clone https://github.com/ace-step/ACE-Step-1.5 /opt/acestep && \
+    cd /opt/acestep && git checkout 6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0 && \
+    pip install --no-cache-dir ./acestep/third_parts/nano-vllm && \
+    pip install --no-cache-dir . && \
+    pip install --no-cache-dir google-cloud-firestore google-cloud-storage
 
 ENV HF_HOME=/models
 ENV ACESTEP_CHECKPOINT_DIR=/models/acestep
