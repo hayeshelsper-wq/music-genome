@@ -41,6 +41,19 @@ _warm = False
 # One live session at a time — generation saturates the GPU.
 _session_sem = threading.Semaphore(1)
 
+# MusicCoCa runs on TFLite interpreters, which are single-threaded AND
+# thread-affine — concurrent (or cross-thread) invokes raise "There is at
+# least 1 reference to internal data". EVERY style-model touch (construction,
+# warm-up embed, anchor embeds, tokenize) runs on this one worker thread.
+from concurrent.futures import ThreadPoolExecutor
+
+_style_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="style")
+
+
+def _on_style_thread(fn, *args):
+    """Run fn on the dedicated style thread and wait (for sync contexts)."""
+    return _style_executor.submit(fn, *args).result()
+
 
 def _ensure() -> bool:
     global _loaded, _system, _style, _err
@@ -67,8 +80,14 @@ def _ensure() -> bool:
             from magenta_rt.jax.system import MagentaRT2System
             from magenta_rt.musiccoca import MusicCoCa
 
-            _style = MusicCoCa()
-            _system = MagentaRT2System(size=MODEL_SIZE, style_model=_style)
+            def _build():
+                global _style, _system
+                _style = MusicCoCa()
+                _system = MagentaRT2System(size=MODEL_SIZE, style_model=_style)
+
+            # Construct on the style thread so the TFLite interpreters live
+            # where they'll be invoked.
+            _on_style_thread(_build)
         except Exception as e:  # noqa: BLE001
             _err = f"{type(e).__name__}: {str(e)[:300]}"
             _system = None
@@ -86,11 +105,15 @@ def _warm_up() -> None:
         if _warm:
             return
         try:
-            emb = _style.embed("warmup jazz")
-            _generate_chunk(_normalize(emb), None)
+            emb = _on_style_thread(lambda: _normalize(_style.embed("warmup jazz")))
+            tokens = _on_style_thread(_style.tokenize, emb)
+            _generate_from_tokens(tokens, None)
             _warm = True
         except Exception as e:  # noqa: BLE001
             global _err
+            import traceback
+
+            traceback.print_exc()
             _err = f"warmup: {type(e).__name__}: {str(e)[:200]}"
 
 
@@ -124,14 +147,14 @@ def _embed_anchor(anchor: dict) -> np.ndarray:
     return _normalize(_style.embed(str(anchor.get("text") or "ambient")))
 
 
-def _generate_chunk(style_vec: np.ndarray, state):
-    """One CHUNK_S-second stereo chunk conditioned on the style embedding."""
+def _generate_from_tokens(tokens, state):
+    """One CHUNK_S-second stereo chunk conditioned on pre-tokenized style.
+    Tokenization happens on the style thread; generation (JAX) is thread-safe."""
     frames = max(1, int(round(CHUNK_S * 25)))  # 25 frames/sec
     # upstream: magenta_rt/jax/system.py generate() — conditioning dict carries
     # the (tokenized) style; ADAPTATION POINT: verify the conditioning key
     # against the pinned notebook (notebooks/python_inference_demo.ipynb) at
     # deploy time.
-    tokens = _style.tokenize(style_vec)
     conditioning = {"style": tokens}
     waveform, new_state = _system.generate(conditioning, frames=frames, state=state)
     samples = np.asarray(waveform.samples)
@@ -165,10 +188,10 @@ async def session(ws: WebSocket):
         init = json.loads(await ws.receive_text())
         weight = float(init.get("weight", 0.5))
         loop = asyncio.get_event_loop()
-        emb_a, emb_b = await asyncio.gather(
-            loop.run_in_executor(None, _embed_anchor, init.get("a") or {}),
-            loop.run_in_executor(None, _embed_anchor, init.get("b") or {}),
-        )
+        # Sequential, on the single style thread — TFLite interpreters can't
+        # take concurrent or cross-thread invokes.
+        emb_a = await loop.run_in_executor(_style_executor, _embed_anchor, init.get("a") or {})
+        emb_b = await loop.run_in_executor(_style_executor, _embed_anchor, init.get("b") or {})
 
         await ws.send_text(
             json.dumps({"type": "meta", "sr": SR, "channels": CHANNELS, "chunkSec": CHUNK_S})
@@ -197,7 +220,8 @@ async def session(ws: WebSocket):
                     await ws.close(code=1000, reason="session_cap")
                     break
                 style_vec = _slerp(emb_a, emb_b, weight)  # latest weight each chunk
-                pcm, state = await loop.run_in_executor(None, _generate_chunk, style_vec, state)
+                tokens = await loop.run_in_executor(_style_executor, _style.tokenize, style_vec)
+                pcm, state = await loop.run_in_executor(None, _generate_from_tokens, tokens, state)
                 await ws.send_bytes(pcm)
         finally:
             running = False
