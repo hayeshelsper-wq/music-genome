@@ -51,6 +51,9 @@ def _ensure() -> bool:
             _proc = SAMAudioProcessor.from_pretrained(MODEL_ID)
             _sr = int(getattr(_proc, "audio_sampling_rate", 48000))
         except Exception as e:  # noqa: BLE001
+            import traceback
+
+            traceback.print_exc()  # full detail to logs; _err stays short
             _err = f"{type(e).__name__}: {str(e)[:300]}"
             _model = None
         finally:
