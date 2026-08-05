@@ -32,27 +32,33 @@ It runs entirely on **Google Cloud** (Cloud Run, Firestore, GCS, Secret Manager)
                                   ┌──────────────────────────────────────────┐
   Browser ──────────────────────▶ │  web  (Next.js 15 / React 19 / TS)        │
    (password-gated)               │  Cloud Run · public                       │
-                                  └───┬───────────────┬──────────────┬────────┘
-                                      │               │              │
+        │                         └───┬───────────────┬──────────────┬────────┘
+        │ WS (crossfader)             │               │              │
+        ▼                             │               │              │
               ┌───────────────────────┘               │              └─────────────┐
               ▼                                        ▼                            ▼
    ┌──────────────────────┐         ┌───────────────────────────┐      ┌────────────────────────┐
    │ Open data APIs        │        │ audio-service (FastAPI)    │      │ Firestore · GCS         │
-   │ MusicBrainz · Wikidata│        │ Cloud Run · CPU            │      │ reports, uploads,       │
-   │ Last.fm · iTunes ·    │        │ librosa · Demucs · CLAP ·  │      │ artist fingerprints,    │
-   │ Genius · AcousticBrainz│       │ Essentia · Whisper ·       │      │ CLAP vectors · audio    │
-   └──────────────────────┘         │ Rubber Band                │      └────────────────────────┘
-                                     └───────┬───────────┬────────┘
-        ┌──────────────────────────────┐    │           │     ┌──────────────────────────────┐
-        │ Anthropic Claude (opus-4-8)  │◀───┘           └───▶ │ GPU services · Cloud Run · L4 │
-        │ narratives + agentic tool use│                      │ musicgen · audio-flamingo     │
-        └──────────────────────────────┘                      └──────────────────────────────┘
+   │ MusicBrainz · Wikidata│        │ Cloud Run · CPU            │      │ reports, uploads, runs, │
+   │ Last.fm · iTunes ·    │        │ librosa · Demucs · CLAP ·  │      │ loras, symbolic, extrac-│
+   │ Genius · AcousticBrainz│       │ Essentia · Whisper ·       │      │ tions · CLAP vectors ·  │
+   └──────────────────────┘         │ basic-pitch · fluidsynth · │      │ audio                   │
+                                     │ Rubber Band · WS proxy ───┼──┐   └────────────────────────┘
+                                     └───────┬───────────┬────────┘  │ WS (token + IAM)
+        ┌──────────────────────────────┐    │           │           ▼
+        │ Anthropic Claude (opus-4-8)  │◀───┘     ┌─────┴──────────────────────────────────┐
+        │ narratives + agentic tool use│          │ GPU services · Cloud Run · L4           │
+        └──────────────────────────────┘          │ musicgen(-melody) · audio-flamingo ·    │
+                                                  │ acestep (songs+LoRA) · sam-audio        │
+                                                  │ (extraction) · mrt (realtime crossfade) │
+                                                  │ + lora-trainer (Cloud Run Job)          │
+                                                  └─────────────────────────────────────────┘
 ```
 
-- **`web`** — the Next.js App Router app (the whole UI + API routes). Stores assembled artist reports, uploads, and per‑artist sonic fingerprints in **Firestore**; audio in **GCS**; secrets in **Secret Manager**.
-- **`audio-service`** — a Python FastAPI sidecar that does the heavy DSP: tempo/key/chords (librosa), source separation (Demucs), CLAP audio/text embeddings, discriminative tagging (Essentia), transcription (faster‑whisper), and time‑stretch/pitch‑shift (Rubber Band). Private (IAM‑gated); the web app calls it with a signed identity token.
-- **GPU services** — two scale‑to‑zero NVIDIA **L4** Cloud Run services: **MusicGen** (generation) and **Audio Flamingo** (an audio‑LLM that describes a clip like a producer would).
-- **Anthropic Claude** (`claude-opus-4-8`) powers every prose/narration surface and the agentic chat's tool‑use loop.
+- **`web`** — the Next.js App Router app (the whole UI + API routes). Stores assembled artist reports, uploads, optimizer runs, LoRA voices, symbolic melodies, and extractions in **Firestore**; audio in **GCS**; secrets in **Secret Manager**.
+- **`audio-service`** — a Python FastAPI sidecar that does the heavy DSP: tempo/key/chords (librosa), source separation (Demucs), CLAP audio/text embeddings, discriminative tagging (Essentia), transcription (faster‑whisper), symbolic transcription (basic‑pitch/pyin), MIDI rendering (fluidsynth), time‑stretch/pitch‑shift (Rubber Band) — plus the token‑gated **WebSocket proxy** the browser uses to reach the private crossfader GPU.
+- **GPU services** — scale‑to‑zero NVIDIA **L4** Cloud Run services: **MusicGen‑melody** (sketch generation + hum conditioning), **Audio Flamingo** (audio‑LLM description), **ACE‑Step 1.5** (full songs with lyrics + LoRA voices), **SAM Audio** (text‑prompted extraction), **Magenta RealTime** (live crossfade generation), and the **lora‑trainer** Cloud Run Job.
+- **Anthropic Claude** (`claude-opus-4-8`) powers every prose/narration surface, the agentic chat's tool‑use loop, and the optimizer loop's critic.
 
 > 📐 For a deeper technical write‑up — request lifecycles, the Firestore data model, service‑to‑service auth, caching, and the design decisions/tradeoffs — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -107,6 +113,36 @@ The full synthetic metadata for a track in one view — measured DSP (librosa), 
 
 ![Song X-Ray Showcase](docs/screenshots/showcase.png)
 
+### 🔁 Studio Optimize — the agentic generate→verify loop *(Next Wave)*
+One shot is a guess; Optimize is an experiment. The Studio generates, **measures** the clip with the real analysis pipeline, then Claude reads the scorecard and revises the prompt — changing the fewest words that plausibly move the failing dimensions — and tries again, streaming every attempt (word‑level prompt diff, scorecard, audio, critique, DNA‑match sparkline) until it clears the threshold or plateaus. Every run is persisted and replayable.
+
+*(screenshot placeholder: docs/screenshots/optimize.png)*
+
+### 🎼 Melody layer — the composition genome *(Next Wave)*
+Every X‑Ray can now transcribe the lead melody (Demucs vocal stem → **basic‑pitch**) into an interactive **piano roll** with downloadable MIDI, and Trails gain a second axis: **timbral similarity** (CLAP — how it sounds) vs **melodic similarity** (transcribed notes — what it plays), so you can tell which kind of inheritance a lineage carries.
+
+*(screenshot placeholder: docs/screenshots/melody.png)*
+
+### ✨ Extract anything *(Next Wave)*
+The Stem Lab goes beyond four fixed stems: describe a sound — "the tambourine", "crowd noise", "the guitar solo" — optionally drag a time span, and **SAM Audio** pulls it out as a new stem row, synced into the same solo/mute clock. The Ask agent can call it too ("isolate the guitar and describe it").
+
+*(screenshot placeholder: docs/screenshots/extract.png)*
+
+### 🎙️ Hum to Genome *(Next Wave)*
+Hum a melody; the genome transcribes it (pyin), renders a clean piano take, **places your hum on the Living Map** by how it sounds, then produces it in a real style — MusicGen‑melody conditions directly on your tune, and a fidelity scorecard verifies the melody survived production.
+
+*(screenshot placeholder: docs/screenshots/hum.png)*
+
+### 🎤 Voices — ACE‑Step + LoRA *(Next Wave)*
+The Studio gains a full‑song engine: **ACE‑Step 1.5** takes style tags + lyrics (yours, or Claude‑written originals in the artist's voice) up to two minutes, and you can train **LoRA voices on your own uploads** (never catalog previews) as a Cloud Run GPU job — then generate in your own sound.
+
+*(screenshot placeholder: docs/screenshots/voices.png)*
+
+### 🎚 Artist DNA Crossfader *(Next Wave)*
+Two artists, one slider, **live generated audio**: Magenta RealTime morphs between the two artists' measured style embeddings while you listen — every second generated on the fly, streamed over an authenticated WebSocket into an AudioWorklet player.
+
+*(screenshot placeholder: docs/screenshots/crossfader.png)*
+
 ### …plus the rest of the platform
 - **Song X‑Ray (live)** — run the same analysis on any track from an artist page, playlist, or upload (computed on demand, then cached for instant reuse).
 - **Stem Lab** — Demucs solo/mute player with per‑stem analysis and karaoke timing.
@@ -143,6 +179,10 @@ The **analyze → generate → verify** loop and the **agentic tool surface** ar
 | Crowd‑sourced audio features | **AcousticBrainz** |
 | Song credits + lyrics | **Genius** (+ lrclib fallback) |
 | All measured audio (DSP, CLAP, stems, gen) | the **audio-service** (analyzed from previews/uploads) |
+| Symbolic transcription | **basic‑pitch** (Spotify, Apache‑2.0) + librosa pyin |
+| Promptable extraction | **SAM Audio** (Meta — SAM License, gated weights) |
+| Full‑song generation + LoRA voices | **ACE‑Step 1.5** (MIT code, ungated weights) |
+| Live crossfade generation | **Magenta RealTime** (Apache‑2.0 code, **CC‑BY 4.0** weights — Google DeepMind) |
 
 ---
 

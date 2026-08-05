@@ -11,9 +11,13 @@ Four deployable units, all on Google Cloud Run (scale‑to‑zero except `web`):
 | Unit | Language / runtime | Access | Responsibility |
 |---|---|---|---|
 | `web` | Next.js 15 / Node | public, password‑gated | UI + API routes; the only public surface |
-| `audio-service` | Python / FastAPI (CPU) | private (IAM) | all DSP, source separation, CLAP, tagging, transcription, stretch/shift |
-| `musicgen` | Python / FastAPI (NVIDIA L4) | private (IAM) | text‑conditioned music generation |
+| `audio-service` | Python / FastAPI (CPU) | public CORS for `/stemfiles` + WS proxy; API IAM‑called by web | all DSP, source separation, CLAP, tagging, transcription, symbolic transcription (basic‑pitch/pyin), MIDI render (fluidsynth), stretch/shift, crossfader WS proxy |
+| `musicgen` | Python / FastAPI (NVIDIA L4) | private (IAM) | text‑ and melody‑conditioned generation (`facebook/musicgen-melody`) |
 | `flamingo` / `flamingo-afnext` | Python / FastAPI (NVIDIA L4) | private (IAM) | audio‑LLM clip description |
+| `acestep` | Python / FastAPI (NVIDIA L4) | private (IAM) | full songs (tags + lyrics), LoRA voice adapters (LRU‑cached) |
+| `sam-audio` | Python / FastAPI (NVIDIA L4) | private (IAM) | text‑prompted source extraction (gated Meta weights) |
+| `mrt` | Python / FastAPI + JAX (NVIDIA L4) | private (IAM) | Magenta RealTime live crossfade WS sessions (concurrency 1) |
+| `lora-trainer` | Python (Cloud Run **Job**, L4) | job — triggered by web | trains ACE‑Step LoRAs on the user's own uploads |
 
 State lives outside the services:
 
@@ -43,9 +47,48 @@ plumbing, mirroring how Stem Lab already worked.
 | `uploads` | upload id | DSP `features`, `tags`, producer `review`, Flamingo read, `key`/`tempo`, and a **CLAP `embedding`** stored as a Firestore *vector* (for KNN) |
 | `artistSonic` | MBID | a per‑artist sonic fingerprint: CLAP centroid + aggregate DSP over top tracks (powers Trails / Lineage; cached so repeats are instant) |
 | `xrayCache` | `artist\|title` (normalized) | a fully‑assembled Song X‑Ray: DSP, instrument/mood/genre tags, the Music Flamingo read, lyrics, and the Claude producer breakdown — plus `previewUrl` + `artwork` for replay. Persists across cold instances so a once‑computed X‑Ray (the costly part is the Flamingo GPU) is instant forever |
+| `studioRuns` | run id | one optimizer‑loop run: engine, source, `attempts[]` (prompt, scorecard, dnaMatch, GCS `audioPath`), status, `bestAttempt`, `stopReason`. Attempts land via `arrayUnion` so the streaming route persists incrementally |
+| `loras` | lora id | a trained (or training) ACE‑Step voice: `label`, `ownerUploadIds` (own uploads only — hard rule), `gcsPath` to the adapter, `status: queued\|training\|ready\|error` |
+| `uploads/{id}/symbolic/melody`, `xrayCache/{key}/symbolic/melody` | subcollection doc | transcribed notes + melodic DNA + MIDI b64 — a **subcollection** because note lists + MIDI can approach the 1MB doc limit and would bloat every parent read |
+| `extractions` | `sha1(source\|text\|span)` | a SAM Audio extraction: prompt text, source label, GCS `audioPath` — cached forever (deterministic enough) |
 
 The graphs are all 1‑hop, so the app stores a denormalized report document per
 artist rather than running a graph database — see *Decisions* below.
+
+## Crossfader WS auth flow
+
+App Router route handlers can't hold a WebSocket, so the browser dials the
+audio‑service directly (it already fronts the browser for `/stemfiles`), which
+bridges to the private `mrt` GPU:
+
+```
+Browser                    web (Next.js)          audio-service              mrt (GPU)
+   │  GET /api/crossfade/token  │                      │                        │
+   │──────────────────────────▶│ (password-gated)      │                        │
+   │  { token = exp.HMAC(exp) } │                      │                        │
+   │◀──────────────────────────│                       │                        │
+   │  WS /mrt/session?token=…                          │                        │
+   │──────────────────────────────────────────────────▶│ verify HMAC + expiry   │
+   │                                                   │ mint OIDC id-token     │
+   │                                                   │ (metadata server)      │
+   │                                                   │── WS /session ────────▶│
+   │  {init a,b,weight} ──────────────────────────────▶│──────────────────────▶ │
+   │  ◀────────────────── s16le PCM frames ◀───────────│◀────────────────────── │
+   │  {weight} at ≤10Hz ──────────────────────────────▶│──────────────────────▶ │
+```
+
+The shared secret is `CROSSFADE_TOKEN_SECRET` (Secret Manager, mounted in both
+web and audio-service); tokens live 10 minutes; sessions cap at 15.
+
+## Mock harness
+
+`mocks/mock_services.py` (FastAPI, CPU‑only) stands in for every GPU service so
+the whole app runs end‑to‑end on a laptop: `/generate` returns measurable sine
+WAVs (a `bright` prompt adds a 4kHz component the real analysis pipeline can
+detect), `/separate` band‑splits real input audio, and `WS /session` streams a
+tone whose pitch follows the crossfade weight (`?slow=1` exercises the
+buffering UI). See `mocks/README.md` for the env wiring; the real
+`audio-service` runs locally on CPU as part of every e2e check.
 
 ## Request lifecycles
 
