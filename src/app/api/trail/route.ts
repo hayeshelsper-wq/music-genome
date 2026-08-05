@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { computeArtistSonic, cosine, sonicDeltas } from "@/lib/trail";
 import { complete, bestSynthesisLlm } from "@/lib/llm";
 import { ArtistSonic } from "@/lib/store";
+import { transcribeTrack, melodicSimilarity } from "@/lib/symbolic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,36 @@ export async function POST(req: NextRequest) {
 
     const similarity = cosine(a.embedding, b.embedding);
 
+    // Second axis: composition similarity from transcribed melodies of each
+    // artist's representative track. Best-effort — transcription failure just
+    // omits the melodic axis (timbral CLAP still stands).
+    let melodic: number | null = null;
+    try {
+      const aTrack = a.tracks.find((t) => t.previewUrl);
+      const bTrack = b.tracks.find((t) => t.previewUrl);
+      if (aTrack && bTrack) {
+        const [am, bm] = await Promise.all([
+          transcribeTrack({
+            previewUrl: aTrack.previewUrl,
+            artist: a.name,
+            title: aTrack.title,
+            mode: "melody",
+          }),
+          transcribeTrack({
+            previewUrl: bTrack.previewUrl,
+            artist: b.name,
+            title: bTrack.title,
+            mode: "melody",
+          }),
+        ]);
+        if (am.notes.length && bm.notes.length) {
+          melodic = Math.round(melodicSimilarity(am.dna, bm.dna) * 100) / 100;
+        }
+      }
+    } catch {
+      melodic = null;
+    }
+
     // Orient earlier→later for the deltas + narration.
     const influencer = body.influencer === "b" ? b : a;
     const influenced = body.influencer === "b" ? a : b;
@@ -76,8 +107,13 @@ export async function POST(req: NextRequest) {
         facts("EARLIER (influence)", influencer),
         facts("LATER (influenced)", influenced),
         `CLAP catalog similarity: ${similarity.toFixed(2)} (0 = unrelated, 1 = identical).`,
+        melodic != null
+          ? `Timbral similarity ${similarity.toFixed(2)}, melodic similarity ${melodic.toFixed(2)} — comment on which kind of inheritance this is (sound vs composition).`
+          : "",
         `${influencer.name} influenced ${influenced.name}.`,
-      ].join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
       narration = await complete(SYSTEM, user, bestSynthesisLlm());
     } catch {
       narration = ""; // narration is a bonus; the measured comparison still stands
@@ -88,6 +124,7 @@ export async function POST(req: NextRequest) {
       b: publicView(b),
       influencer: influencer.mbid === a.mbid ? "a" : "b",
       similarity,
+      similarities: { timbral: similarity, ...(melodic != null ? { melodic } : {}) },
       deltas,
       narration,
     });

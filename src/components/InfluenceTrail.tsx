@@ -24,6 +24,7 @@ interface TrailResult {
   b: SonicView;
   influencer: "a" | "b";
   similarity: number;
+  similarities?: { timbral: number; melodic?: number };
   deltas: Delta[];
   narration: string;
 }
@@ -228,6 +229,21 @@ export default function InfluenceTrail() {
             <ArtistCard view={later} role="descendant" audioRef={later === result.a ? audioA : audioB} />
           </div>
 
+          {result.similarities && (
+            <div className="trail-axes">
+              <SimBar
+                label="🎨 Timbral (CLAP — how it sounds)"
+                value={result.similarities.timbral}
+              />
+              {typeof result.similarities.melodic === "number" && (
+                <SimBar
+                  label="🎼 Melodic (transcribed notes — what it plays)"
+                  value={result.similarities.melodic}
+                />
+              )}
+            </div>
+          )}
+
           {result.narration && (
             <div className="trail-narration">
               <div className="stat-label">📜 The inheritance</div>
@@ -252,6 +268,24 @@ export default function InfluenceTrail() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function SimBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
+  return (
+    <div className="trail-axis">
+      <div className="trail-axis-label">
+        <span>{label}</span>
+        <b>{pct}%</b>
+      </div>
+      <div className="trail-axis-bar">
+        <div
+          className="trail-axis-fill"
+          style={{ width: `${pct}%`, background: simColor(value) }}
+        />
+      </div>
     </div>
   );
 }
