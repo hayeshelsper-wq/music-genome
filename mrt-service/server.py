@@ -50,13 +50,16 @@ def _ensure() -> bool:
         if _loaded:
             return _system is not None
         try:
-            # MusicCoCa runs on TensorFlow; on a 24GB L4 its ~8GiB audio-embed
-            # op cannot coexist with the JAX generator's allocation. Style
-            # embeds happen once per session, so pin TF to CPU and leave the
-            # whole GPU to JAX.
-            import tensorflow as tf
+            # magenta-rt runs MusicCoCa on TFLite (CPU); the GPU belongs to JAX.
+            # Full TensorFlow may not be installed — if it is, keep it off GPU.
+            try:
+                import tensorflow as tf  # noqa: F401
 
-            tf.config.set_visible_devices([], "GPU")
+                tf.config.set_visible_devices([], "GPU")
+            except ModuleNotFoundError:
+                pass
+            # L4 24GB: JAX preallocation fights its own big allocs — deploy with
+            # XLA_PYTHON_CLIENT_PREALLOCATE=false, TF_GPU_ALLOCATOR=cuda_malloc_async.
 
             # upstream: magenta/magenta-realtime@694a545 magenta_rt/jax/system.py —
             # MagentaRT2System(size=..., ...); generate(conditioning, frames=25,
