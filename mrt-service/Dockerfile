@@ -21,9 +21,15 @@ RUN pip install --no-cache-dir "magenta-rt==2.0.3" "jax[cuda12]" \
 # get rate-limited mid-download, so the token is required — and a missing
 # checkpoint must FAIL the build, not ship a weightless image.
 ENV HOME=/models
+# `mrt models download` is an interactive menu (simple-term-menu) — unusable in
+# a build. `mrt models init` fetches the small shared resources fine; the big
+# checkpoints come straight from HF into the same tree the CLI would use.
 RUN --mount=type=secret,id=hf_token \
     export HF_TOKEN=$(cat /run/secrets/hf_token) && \
-    mrt models init && mrt models download && \
+    mrt models init && \
+    python -c "from huggingface_hub import snapshot_download; import os; \
+      snapshot_download('google/magenta-realtime-2', token=os.environ.get('HF_TOKEN'), \
+      local_dir='/models/Documents/Magenta/magenta-rt-v2')" && \
     test -f /models/Documents/Magenta/magenta-rt-v2/checkpoints/mrt2_base.safetensors
 
 COPY server.py .
