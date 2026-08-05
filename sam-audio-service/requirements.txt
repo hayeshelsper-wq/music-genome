@@ -1,0 +1,11 @@
+# SAM Audio extraction service. python >=3.11 (upstream requires it).
+fastapi>=0.110
+uvicorn[standard]>=0.29
+soundfile>=0.12
+librosa>=0.10
+numpy
+google-cloud-storage>=2.16   # gs:// audio_url inputs
+# upstream: facebookresearch/sam-audio@bb4c6999d2677c7402360e426afc01ddfad6dce0
+# NOT on PyPI; pulls heavy git deps (dacvae, imagebind, laion-clap fork,
+# perception-models, audiobox_aesthetics, torchcodec, transformers>=4.54).
+sam-audio @ git+https://github.com/facebookresearch/sam-audio@bb4c6999d2677c7402360e426afc01ddfad6dce0
