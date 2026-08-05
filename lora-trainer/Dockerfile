@@ -13,10 +13,8 @@ RUN pip install --no-cache-dir \
 
 ENV HF_HOME=/models
 ENV ACESTEP_CHECKPOINT_DIR=/models/acestep
-RUN python - <<'EOF'
-from huggingface_hub import snapshot_download
-snapshot_download("ACE-Step/Ace-Step1.5", local_dir="/models/acestep")
-EOF
+RUN python -c "from huggingface_hub import snapshot_download; \
+    snapshot_download('ACE-Step/Ace-Step1.5', local_dir='/models/acestep')"
 
 COPY train.py .
 

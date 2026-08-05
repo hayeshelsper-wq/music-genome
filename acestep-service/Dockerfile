@@ -16,11 +16,9 @@ RUN pip install --no-cache-dir \
 # repo ACE-Step/Ace-Step1.5 carries the config-addressable checkpoints.
 ENV HF_HOME=/models
 ENV ACESTEP_CHECKPOINT_DIR=/models/acestep
-RUN python - <<'EOF'
-from huggingface_hub import snapshot_download
-snapshot_download("ACE-Step/Ace-Step1.5", local_dir="/models/acestep")
-snapshot_download("ACE-Step/acestep-5Hz-lm-0.6B", local_dir="/models/acestep/acestep-5Hz-lm-0.6B")
-EOF
+RUN python -c "from huggingface_hub import snapshot_download; \
+    snapshot_download('ACE-Step/Ace-Step1.5', local_dir='/models/acestep'); \
+    snapshot_download('ACE-Step/acestep-5Hz-lm-0.6B', local_dir='/models/acestep/acestep-5Hz-lm-0.6B')"
 
 COPY server.py .
 

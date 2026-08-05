@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt pyfluidsynth
 # ---- small GM soundfont for /render-midi (FluidR3Mono, ~15MB sf3) ----
 ENV SOUNDFONT_PATH=/app/soundfont.sf3
 RUN curl -fsSL -o /app/soundfont.sf3 \
-    https://github.com/musescore/MuseScore/raw/master/share/sound/FluidR3Mono_GM.sf3
+    https://github.com/musescore/MuseScore/raw/v3.6.2/share/sound/FluidR3Mono_GM.sf3
 
 # ---- bake the discriminative tagger models (Essentia Discogs-EffNet embedding +
 #      MTG-Jamendo instrument/genre/mood heads + voice/instrumental). ~100MB. ----
