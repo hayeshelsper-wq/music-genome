@@ -50,6 +50,14 @@ def _ensure() -> bool:
         if _loaded:
             return _system is not None
         try:
+            # MusicCoCa runs on TensorFlow; on a 24GB L4 its ~8GiB audio-embed
+            # op cannot coexist with the JAX generator's allocation. Style
+            # embeds happen once per session, so pin TF to CPU and leave the
+            # whole GPU to JAX.
+            import tensorflow as tf
+
+            tf.config.set_visible_devices([], "GPU")
+
             # upstream: magenta/magenta-realtime@694a545 magenta_rt/jax/system.py —
             # MagentaRT2System(size=..., ...); generate(conditioning, frames=25,
             # state) -> (audio.Waveform, MagentaRT2State). 25 frames ≈ 1s.
@@ -191,8 +199,16 @@ async def session(ws: WebSocket):
         finally:
             running = False
             read_task.cancel()
-    except (WebSocketDisconnect, Exception):
+    except WebSocketDisconnect:
         pass
+    except Exception:  # noqa: BLE001 — log it; silent sessions are undebuggable
+        import traceback
+
+        traceback.print_exc()
+        try:
+            await ws.send_text(json.dumps({"type": "error", "message": "session failed"}))
+        except Exception:
+            pass
     finally:
         _session_sem.release()
         try:
