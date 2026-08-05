@@ -42,3 +42,16 @@ export async function deleteAudio(objectPath: string): Promise<void> {
     .file(objectPath)
     .delete({ ignoreNotFound: true });
 }
+
+/** Download a stored object's bytes (studio attempts, extractions, hums). */
+export async function readAudio(objectPath: string): Promise<Buffer> {
+  const [data] = await getStorage().bucket(BUCKET).file(objectPath).download();
+  return data;
+}
+
+/** App-proxied playback URL for a stored object — keeps audio behind the auth
+ *  gate (no public bucket, no signed-URL expiry headaches). Served by
+ *  /api/blob/audio, which only allows a fixed set of prefixes. */
+export function signedOrProxyUrl(objectPath: string): string {
+  return `/api/blob/audio?path=${encodeURIComponent(objectPath)}`;
+}

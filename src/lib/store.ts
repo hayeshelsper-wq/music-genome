@@ -12,8 +12,9 @@
 // from ADC / the metadata server, or set GOOGLE_CLOUD_PROJECT.
 
 import { Firestore, FieldValue } from "@google-cloud/firestore";
-import { ArtistDnaReport } from "./types";
+import { ArtistDnaReport, MelodicDna } from "./types";
 import { TagSet } from "./trackReview";
+import type { Scorecard } from "./genomePrompt";
 
 let db: Firestore | null = null;
 function getDb(): Firestore {
@@ -333,6 +334,127 @@ export async function listXray(limit = 12): Promise<XrayListItem[]> {
     .select("artist", "title", "previewUrl", "artwork")
     .get();
   return snap.docs.map((d) => d.data() as XrayListItem);
+}
+
+// ---- Studio optimizer runs (generate → verify → critique loops) ------------
+// One document per run; attempts accumulate via arrayUnion so the streaming
+// route can persist incrementally without read-modify-write races.
+
+export interface StudioAttempt {
+  i: number;
+  prompt: string;
+  promptSource: string;
+  scorecard: Scorecard;
+  dnaMatch: number;
+  audioPath: string; // GCS object path
+  critique?: string | null;
+}
+
+export interface StudioRun {
+  id: string;
+  createdAt: number;
+  engine: string;
+  source: { kind: string; id?: string; mbid?: string };
+  referenceLabel: string;
+  attempts: StudioAttempt[];
+  status: "running" | "done" | "error";
+  bestAttempt: number;
+  stopReason?: string;
+}
+
+const STUDIO_RUNS = process.env.STUDIO_RUNS_COLLECTION || "studioRuns";
+
+export async function createStudioRun(run: StudioRun): Promise<void> {
+  await getDb().collection(STUDIO_RUNS).doc(run.id).set({ ...run });
+}
+
+export async function appendStudioAttempt(id: string, a: StudioAttempt): Promise<void> {
+  await getDb()
+    .collection(STUDIO_RUNS)
+    .doc(id)
+    .update({ attempts: FieldValue.arrayUnion({ ...a }) });
+}
+
+export async function finishStudioRun(id: string, patch: Partial<StudioRun>): Promise<void> {
+  await getDb().collection(STUDIO_RUNS).doc(id).set({ ...patch }, { merge: true });
+}
+
+export async function getStudioRun(id: string): Promise<StudioRun | null> {
+  const snap = await getDb().collection(STUDIO_RUNS).doc(id).get();
+  return snap.exists ? (snap.data() as StudioRun) : null;
+}
+
+export async function listStudioRuns(limit = 20): Promise<StudioRun[]> {
+  const snap = await getDb()
+    .collection(STUDIO_RUNS)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+  return snap.docs.map((d) => d.data() as StudioRun);
+}
+
+// ---- LoRA voices (ACE-Step adapters trained on the user's own uploads) -----
+
+export interface LoraRecord {
+  id: string;
+  label: string;
+  ownerUploadIds: string[];
+  gcsPath: string;
+  baseModel: string;
+  status: "queued" | "training" | "ready" | "error";
+  createdAt: number;
+  trainedAt?: number;
+  error?: string;
+}
+
+const LORAS = process.env.LORAS_COLLECTION || "loras";
+
+export async function saveLora(rec: LoraRecord): Promise<void> {
+  await getDb().collection(LORAS).doc(rec.id).set({ ...rec });
+}
+
+export async function patchLora(id: string, patch: Partial<LoraRecord>): Promise<void> {
+  await getDb().collection(LORAS).doc(id).set({ ...patch }, { merge: true });
+}
+
+export async function listLoras(): Promise<LoraRecord[]> {
+  const snap = await getDb().collection(LORAS).orderBy("createdAt", "desc").get();
+  return snap.docs.map((d) => d.data() as LoraRecord);
+}
+
+// ---- symbolic melodies (transcriptions) ------------------------------------
+// Stored in a subcollection (uploads/{id}/symbolic/melody, xrays/{key}/symbolic/
+// melody) rather than inline fields: note lists + MIDI b64 can approach the
+// Firestore 1MB document limit and would bloat every list/get of the parent.
+
+export interface SymbolicMelody {
+  notes: { p: number; s: number; e: number; v: number }[];
+  source: "basic-pitch" | "pyin";
+  stem: string;
+  dna: MelodicDna;
+  midi_b64?: string;
+  bpm?: number | null;
+}
+
+function symbolicDoc(scope: "uploads" | "xrays", key: string) {
+  const parent = scope === "uploads" ? UPLOADS : XRAY;
+  return getDb().collection(parent).doc(key).collection("symbolic").doc("melody");
+}
+
+export async function saveSymbolic(
+  scope: "uploads" | "xrays",
+  key: string,
+  m: SymbolicMelody
+): Promise<void> {
+  await symbolicDoc(scope, key).set({ ...m, savedAt: Date.now() });
+}
+
+export async function getSymbolic(
+  scope: "uploads" | "xrays",
+  key: string
+): Promise<SymbolicMelody | null> {
+  const snap = await symbolicDoc(scope, key).get();
+  return snap.exists ? (snap.data() as SymbolicMelody) : null;
 }
 
 export type StoreErrorCode = "unconfigured" | "unavailable" | "error";
