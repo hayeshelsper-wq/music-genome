@@ -1443,3 +1443,17 @@ a:hover { text-decoration: underline; }
 .trail-axis-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
 .trail-axis-bar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
 .trail-axis-fill { height: 100%; border-radius: 999px; transition: width 0.4s; }
+
+/* ---- Stem Lab: Extract anything (SAM Audio) --------------------------- */
+.extract-row { margin: 14px 0; padding: 12px 14px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 12px; display: flex;
+  flex-direction: column; gap: 8px; }
+.extract-controls { display: flex; gap: 8px; }
+.extract-controls .search-input { flex: 1; }
+.extract-span-bar { position: relative; height: 18px; background: var(--panel-2);
+  border-radius: 6px; cursor: crosshair; touch-action: none; overflow: hidden; }
+.extract-span-sel { position: absolute; top: 0; bottom: 0;
+  background: rgba(199, 146, 234, 0.35); border: 1px solid #c792ea; border-radius: 4px; }
+.extract-span-playhead { position: absolute; top: 0; bottom: 0; width: 1.5px;
+  background: rgba(255,255,255,0.55); }
+.stem-row.extra .stem-name { color: #c792ea; }

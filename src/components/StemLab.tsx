@@ -53,6 +53,121 @@ export default function StemLab({
   const [rollBusy, setRollBusy] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);
 
+  // "Extract anything" (SAM Audio) — extra stem rows in the same synced clock.
+  const [extras, setExtras] = useState<{ key: string; label: string; text: string }[]>([]);
+  const [extraText, setExtraText] = useState("");
+  const [extraBusy, setExtraBusy] = useState(false);
+  const [extraStatus, setExtraStatus] = useState("");
+  const [extraError, setExtraError] = useState<string | null>(null);
+  const [span, setSpan] = useState<[number, number] | null>(null);
+  const spanDrag = useRef<{ startFrac: number; moved: boolean } | null>(null);
+  const spanBarRef = useRef<HTMLDivElement | null>(null);
+
+  // Esc clears the span selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSpan(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function spanFrac(clientX: number): number {
+    const el = spanBarRef.current;
+    if (!el) return 0;
+    const r = el.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  }
+
+  function onSpanDown(e: React.PointerEvent) {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    spanDrag.current = { startFrac: spanFrac(e.clientX), moved: false };
+  }
+  function onSpanMove(e: React.PointerEvent) {
+    if (!spanDrag.current) return;
+    const f = spanFrac(e.clientX);
+    const { startFrac } = spanDrag.current;
+    if (Math.abs(f - startFrac) > 0.01) {
+      spanDrag.current.moved = true;
+      const dur = durationRef.current || 30;
+      setSpan([Math.min(startFrac, f) * dur, Math.max(startFrac, f) * dur]);
+    }
+  }
+  function onSpanUp() {
+    if (spanDrag.current && !spanDrag.current.moved) setSpan(null); // plain click clears
+    spanDrag.current = null;
+  }
+
+  async function addExtraBuffer(key: string, url: string) {
+    const ctx = ctxRef.current;
+    if (!ctx) throw new Error("audio not ready");
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`audio fetch ${res.status}`);
+    const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+    buffersRef.current[key] = buf;
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+    g.gain.value = solo ? 0 : 1;
+    gainsRef.current[key] = g;
+    if (buf.duration > durationRef.current) {
+      durationRef.current = buf.duration;
+      setDuration(buf.duration);
+    }
+    if (playing) await startPlayback(posRef.current); // join the running clock
+  }
+
+  async function extract(text: string, spanSel: [number, number] | null) {
+    const trimmed = text.trim();
+    if (!trimmed || extraBusy) return;
+    setExtraBusy(true);
+    setExtraError(null);
+    setExtraStatus("Extracting with SAM Audio…");
+    try {
+      // Poll through the cold-GPU 202 (warming) phase.
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const res = await fetch("/api/track/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            previewUrl,
+            text: trimmed,
+            ...(spanSel ? { spanStart: spanSel[0], spanEnd: spanSel[1] } : {}),
+          }),
+        });
+        const j = await res.json();
+        if (res.status === 202 && j.warming) {
+          setExtraStatus("The extraction GPU is cold — warming it up…");
+          await new Promise((r) => setTimeout(r, 5000));
+          continue;
+        }
+        if (!res.ok || j.error) throw new Error(j.error || `failed (${res.status})`);
+        const key = `x:${trimmed}:${Date.now()}`;
+        await addExtraBuffer(key, j.url);
+        setExtras((prev) => [...prev, { key, label: `✨ ${trimmed} (AI-extracted)`, text: trimmed }]);
+        setExtraText("");
+        setSpan(null);
+        return;
+      }
+      throw new Error("GPU still warming — try again in a minute");
+    } catch (e) {
+      setExtraError(e instanceof Error ? e.message : "extraction failed");
+    } finally {
+      setExtraBusy(false);
+      setExtraStatus("");
+    }
+  }
+
+  function removeExtra(key: string) {
+    delete buffersRef.current[key];
+    try {
+      gainsRef.current[key]?.disconnect();
+    } catch {}
+    delete gainsRef.current[key];
+    setExtras((prev) => prev.filter((x) => x.key !== key));
+    setSolo((s) => (s === key ? null : s));
+    if (playing) startPlayback(posRef.current);
+  }
+
   async function loadRoll() {
     setRollOpen(true);
     if (roll || rollBusy) return;
@@ -95,6 +210,8 @@ export default function StemLab({
     setPlaying(false);
     setSolo(null);
     setMuted({});
+    setExtras([]);
+    setSpan(null);
     (async () => {
       try {
         const url = `/api/track/stems?previewUrl=${encodeURIComponent(
@@ -177,15 +294,16 @@ export default function StemLab({
     };
   }, [data]);
 
-  // mute/solo → gain
+  // mute/solo → gain (covers the four Demucs stems AND any AI extractions —
+  // everything registered in gainsRef participates in the same solo/mute logic)
   useEffect(() => {
-    for (const { key } of STEMS) {
+    for (const key of Object.keys(gainsRef.current)) {
       const g = gainsRef.current[key];
       if (!g) continue;
       const active = solo ? key === solo : !muted[key];
       g.gain.value = active ? 1 : 0;
     }
-  }, [muted, solo, ready]);
+  }, [muted, solo, ready, extras]);
 
   const tick = () => {
     const ctx = ctxRef.current;
@@ -213,7 +331,7 @@ export default function StemLab({
     stopSources();
     const startTime = ctx.currentTime + 0.06; // tiny lead so all sources fire together
     const srcs: AudioBufferSourceNode[] = [];
-    for (const { key } of STEMS) {
+    for (const key of Object.keys(buffersRef.current)) {
       const buf = buffersRef.current[key];
       const g = gainsRef.current[key];
       if (!buf || !g) continue;
@@ -346,6 +464,107 @@ export default function StemLab({
             </div>
           );
         })}
+        {extras.map((x) => {
+          const isSolo = solo === x.key;
+          const isMuted = solo ? !isSolo : !!muted[x.key];
+          return (
+            <div className={`stem-row extra${isMuted ? " off" : ""}`} key={x.key}>
+              <span className="stem-dot" style={{ background: "#c792ea" }} />
+              <span className="stem-name">{x.label}</span>
+              <div className="stem-btns">
+                <button
+                  className={`stem-toggle${isSolo ? " on" : ""}`}
+                  onClick={() => setSolo(isSolo ? null : x.key)}
+                >
+                  Solo
+                </button>
+                <button
+                  className={`stem-toggle${muted[x.key] && !solo ? " on" : ""}`}
+                  onClick={() => setMuted((m) => ({ ...m, [x.key]: !m[x.key] }))}
+                  disabled={!!solo}
+                >
+                  Mute
+                </button>
+                <button
+                  className="stem-toggle"
+                  title="Re-run this extraction"
+                  onClick={() => {
+                    removeExtra(x.key);
+                    extract(x.text, span);
+                  }}
+                >
+                  ↻
+                </button>
+                <button
+                  className="stem-toggle"
+                  title="Remove"
+                  onClick={() => removeExtra(x.key)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Extract anything (SAM Audio) */}
+      <div className="extract-row">
+        <div className="stat-label">✨ Extract anything <span className="muted">(SAM Audio — AI separation)</span></div>
+        <div className="extract-controls">
+          <input
+            className="search-input"
+            placeholder="Describe a sound — the tambourine, crowd noise, the guitar solo…"
+            value={extraText}
+            onChange={(e) => setExtraText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") extract(extraText, span);
+            }}
+            disabled={extraBusy}
+          />
+          <button
+            className="btn-mini"
+            disabled={extraBusy || !extraText.trim() || !ready}
+            onClick={() => extract(extraText, span)}
+          >
+            {extraBusy ? "…" : "Extract"}
+          </button>
+        </div>
+        <div
+          ref={spanBarRef}
+          className="extract-span-bar"
+          title="Drag to limit the extraction to a time span (Esc clears)"
+          onPointerDown={onSpanDown}
+          onPointerMove={onSpanMove}
+          onPointerUp={onSpanUp}
+        >
+          {span && duration > 0 && (
+            <div
+              className="extract-span-sel"
+              style={{
+                left: `${(span[0] / duration) * 100}%`,
+                width: `${((span[1] - span[0]) / duration) * 100}%`,
+              }}
+            />
+          )}
+          <div
+            className="extract-span-playhead"
+            style={{ left: `${duration ? (time / duration) * 100 : 0}%` }}
+          />
+        </div>
+        <div className="muted" style={{ fontSize: 11 }}>
+          {span
+            ? `span ${span[0].toFixed(1)}s – ${span[1].toFixed(1)}s (Esc to clear)`
+            : "optional: drag the strip above to focus a time span"}
+        </div>
+        {extraBusy && extraStatus && (
+          <div className="muted" style={{ fontSize: 12 }}>
+            <span className="spinner" /> &nbsp;{extraStatus}
+          </div>
+        )}
+        {extraError && (
+          <div className="muted" style={{ fontSize: 12 }}>⚠️ {extraError}</div>
+        )}
       </div>
 
       {/* per-stem analysis */}
