@@ -214,15 +214,25 @@ async def session(ws: WebSocket):
         read_task = asyncio.create_task(reader())
         state = None
         started = time.time()
+        sent_sec = 0.0
+        # Generation runs faster than real-time on the L4; without pacing the
+        # client buffers tens of seconds and the fader feels ~30s laggy. Stay
+        # only AHEAD_S ahead of the playback clock so weight changes land fast.
+        ahead_s = float(os.environ.get("MRT_AHEAD_S", "4.0"))
         try:
             while running:
                 if time.time() - started > SESSION_CAP_S:
                     await ws.close(code=1000, reason="session_cap")
                     break
+                lead = sent_sec - (time.time() - started)
+                if lead > ahead_s:
+                    await asyncio.sleep(lead - ahead_s)
+                    continue
                 style_vec = _slerp(emb_a, emb_b, weight)  # latest weight each chunk
                 tokens = await loop.run_in_executor(_style_executor, _style.tokenize, style_vec)
                 pcm, state = await loop.run_in_executor(None, _generate_from_tokens, tokens, state)
                 await ws.send_bytes(pcm)
+                sent_sec += CHUNK_S
         finally:
             running = False
             read_task.cancel()
