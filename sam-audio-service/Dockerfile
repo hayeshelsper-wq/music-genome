@@ -14,8 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # The 2.13 images use a PEP 668-managed system Python (no conda) — apt's
 # FFmpeg shared libs are on the default loader path, which is exactly what
 # torchcodec dlopens.
+# torchcodec from PyPI is built against CUDA 13 (libnvrtc.so.13) — this image
+# is cu126, so pre-install the cu126-matched wheel from PyTorch's index; the
+# later resolve then sees it satisfied.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+RUN pip install --no-cache-dir --break-system-packages torchcodec \
+      --index-url https://download.pytorch.org/whl/cu126 && \
+    pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 ENV HF_HOME=/models
 ARG SAM_AUDIO_MODEL=facebook/sam-audio-base
