@@ -133,6 +133,22 @@ export const TOOLS: GenomeTool[] = [
       required: ["artist", "title"],
     },
   },
+  {
+    name: "extract_sound",
+    description:
+      "SAM Audio promptable extraction: isolate a described sound ('the tambourine', 'the guitar solo', 'crowd noise') from a library track or a preview URL. Returns a playable audio_url. The output is AI-generated separation, not a clean recording — describe it as such. May return {warming:true} on a cold GPU; tell the user to retry shortly.",
+    input_schema: {
+      type: "object",
+      properties: {
+        track_id: { type: "string", description: "Library upload id (preferred when known)." },
+        preview_url: { type: "string", description: "A track preview URL (when no library id)." },
+        description: { type: "string", description: "What to isolate, as a short lowercase noun phrase." },
+        span_start: { type: "number", description: "Optional span start (seconds)." },
+        span_end: { type: "number", description: "Optional span end (seconds)." },
+      },
+      required: ["description"],
+    },
+  },
 ];
 
 // ---- executors -------------------------------------------------------------
@@ -319,6 +335,20 @@ export async function runTool(
           String(input.artist || ""),
           String(input.title || "")
         );
+      case "extract_sound": {
+        const { runExtraction } = await import("./extract");
+        const result = await runExtraction({
+          uploadId: input.track_id ? String(input.track_id) : undefined,
+          previewUrl: input.preview_url ? String(input.preview_url) : undefined,
+          text: String(input.description || ""),
+          spanStart: input.span_start != null ? Number(input.span_start) : undefined,
+          spanEnd: input.span_end != null ? Number(input.span_end) : undefined,
+        });
+        if ("warming" in result) {
+          return ok({ warming: true, note: "extraction GPU is cold — retry in ~1-2 minutes" });
+        }
+        return ok({ audio_url: result.url, cached: result.cached });
+      }
       default:
         return fail(`unknown tool: ${name}`);
     }

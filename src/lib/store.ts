@@ -422,6 +422,28 @@ export async function listLoras(): Promise<LoraRecord[]> {
   return snap.docs.map((d) => d.data() as LoraRecord);
 }
 
+// ---- SAM Audio extractions (cache) -----------------------------------------
+// Keyed by sha1(source|text|spans) — an extraction is deterministic enough to
+// serve from GCS forever once computed.
+
+export interface ExtractionRecord {
+  text: string;
+  srcLabel: string;
+  audioPath: string;
+  createdAt: number;
+}
+
+const EXTRACTIONS = process.env.EXTRACTIONS_COLLECTION || "extractions";
+
+export async function getExtraction(key: string): Promise<ExtractionRecord | null> {
+  const snap = await getDb().collection(EXTRACTIONS).doc(key).get();
+  return snap.exists ? (snap.data() as ExtractionRecord) : null;
+}
+
+export async function saveExtraction(key: string, rec: ExtractionRecord): Promise<void> {
+  await getDb().collection(EXTRACTIONS).doc(key).set({ ...rec });
+}
+
 // ---- symbolic melodies (transcriptions) ------------------------------------
 // Stored in a subcollection (uploads/{id}/symbolic/melody, xrays/{key}/symbolic/
 // melody) rather than inline fields: note lists + MIDI b64 can approach the
