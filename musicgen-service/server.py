@@ -32,6 +32,9 @@ _model = None
 _proc = None
 _sr = 32000
 _err = None
+# facebook/musicgen-melody does text-only generation too, so a melody-capable
+# deployment is a strict superset of the old text-only one.
+_supports_melody = "melody" in MODEL_ID
 
 
 def _ensure() -> bool:
@@ -45,10 +48,18 @@ def _ensure() -> bool:
             return _model is not None
         try:
             import torch
-            from transformers import AutoProcessor, MusicgenForConditionalGeneration
+            from transformers import AutoProcessor
+
+            # upstream: huggingface/transformers docs model_doc/musicgen_melody —
+            # the melody variant has its own class (chroma conditioning); the
+            # plain checkpoints keep using MusicgenForConditionalGeneration.
+            if _supports_melody:
+                from transformers import MusicgenMelodyForConditionalGeneration as _Cls
+            else:
+                from transformers import MusicgenForConditionalGeneration as _Cls
 
             _proc = AutoProcessor.from_pretrained(MODEL_ID)
-            model = MusicgenForConditionalGeneration.from_pretrained(MODEL_ID)
+            model = _Cls.from_pretrained(MODEL_ID)
             dev = DEVICE if (DEVICE != "cuda" or torch.cuda.is_available()) else "cpu"
             _model = model.to(dev)
             _sr = _model.config.audio_encoder.sampling_rate
@@ -70,10 +81,17 @@ class GenerateReq(BaseModel):
     duration_sec: float = 10.0
     guidance_scale: float = 3.0
     seed: int | None = None
+    melody_wav_b64: str | None = None  # WAV bytes; requires the melody variant
 
 
 @app.post("/generate")
 def generate(req: GenerateReq):
+    if req.melody_wav_b64 and not _supports_melody:
+        return Response(
+            content='{"error":"melody conditioning requires facebook/musicgen-melody"}',
+            media_type="application/json",
+            status_code=400,
+        )
     if not _ensure():
         return Response(
             content=f'{{"error":"model failed to load: {_err}"}}',
@@ -90,7 +108,26 @@ def generate(req: GenerateReq):
     if req.seed is not None:
         torch.manual_seed(int(req.seed))
 
-    inputs = _proc(text=[req.prompt], padding=True, return_tensors="pt").to(dev)
+    if req.melody_wav_b64:
+        import base64
+
+        melody, melody_sr = sf.read(
+            io.BytesIO(base64.b64decode(req.melody_wav_b64)), dtype="float32"
+        )
+        if melody.ndim > 1:
+            melody = melody.mean(axis=1)
+        # upstream: huggingface/transformers feature_extraction_musicgen_melody.py —
+        # the processor resamples to its 32kHz chroma extractor when the passed
+        # sampling_rate differs, so we hand it the true source rate.
+        inputs = _proc(
+            text=[req.prompt],
+            audio=melody,
+            sampling_rate=int(melody_sr),
+            padding=True,
+            return_tensors="pt",
+        ).to(dev)
+    else:
+        inputs = _proc(text=[req.prompt], padding=True, return_tensors="pt").to(dev)
     with torch.no_grad():
         audio = _model.generate(
             **inputs,
