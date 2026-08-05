@@ -5,6 +5,11 @@ soundfile>=0.12
 librosa>=0.10
 numpy
 google-cloud-storage>=2.16   # gs:// audio_url inputs
+# sam-audio's ModelHubMixin subclass still takes proxies/resume_download —
+# both removed in huggingface_hub 1.0; transformers 5.x requires hub>=1.0,
+# so pin both to the last compatible majors.
+huggingface_hub>=0.24,<1.0
+transformers>=4.54,<5
 # upstream: facebookresearch/sam-audio@bb4c6999d2677c7402360e426afc01ddfad6dce0
 # NOT on PyPI; pulls heavy git deps (dacvae, imagebind, laion-clap fork,
 # perception-models, audiobox_aesthetics, torchcodec, transformers>=4.54).
