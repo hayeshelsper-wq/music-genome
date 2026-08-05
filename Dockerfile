@@ -8,6 +8,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Browser-side WS base for the crossfader's audio-service proxy — NEXT_PUBLIC_*
+# vars are inlined at build time, so it must arrive as a build arg.
+ARG NEXT_PUBLIC_AUDIO_WS=""
+ENV NEXT_PUBLIC_AUDIO_WS=${NEXT_PUBLIC_AUDIO_WS}
 RUN npm run build
 
 # 2. minimal runtime

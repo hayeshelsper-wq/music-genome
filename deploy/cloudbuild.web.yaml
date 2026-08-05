@@ -2,9 +2,18 @@
 substitutions:
   _AR: ""
   _TAG: ""
+  _AUDIO_WS: ""   # wss://<audio-service-url> — baked into the client bundle
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "${_AR}/web:${_TAG}", "-f", "Dockerfile", "."]
+    args:
+      - "build"
+      - "-t"
+      - "${_AR}/web:${_TAG}"
+      - "-f"
+      - "Dockerfile"
+      - "--build-arg"
+      - "NEXT_PUBLIC_AUDIO_WS=${_AUDIO_WS}"
+      - "."
 images:
   - "${_AR}/web:${_TAG}"
 timeout: 1800s
