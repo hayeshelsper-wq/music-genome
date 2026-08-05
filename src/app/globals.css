@@ -1495,3 +1495,17 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border); border-radius: 10px; }
 .voice-train summary { cursor: pointer; color: var(--muted); margin-bottom: 10px; }
 .voice-train .search-input { margin-bottom: 10px; }
+
+/* ---- Crossfader -------------------------------------------------------- */
+.crossfader { max-width: 760px; margin: 0 auto; }
+.cf-pickers { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+.cf-picker { flex: 1; position: relative; }
+.cf-vs { font-size: 26px; align-self: center; }
+.cf-live { background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.cf-slider-row { display: flex; align-items: center; gap: 14px; }
+.cf-side { font-weight: 700; min-width: 90px; text-align: center; }
+.cf-slider { flex: 1; accent-color: var(--influence); height: 30px; }
+.cf-meta { text-align: center; font-size: 13px; }
+.cf-endcard { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.cf-footer { margin-top: 26px; text-align: center; font-size: 12px; }

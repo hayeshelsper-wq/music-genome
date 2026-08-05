@@ -225,6 +225,12 @@ export default function InfluenceTrail() {
               </div>
               <div className="trail-arrow">influenced →</div>
               <button className="btn-mini" onClick={playBoth}>▶ Hear both</button>
+              <Link
+                className="btn-mini ghost"
+                href={`/crossfade?a=${earlier.mbid}&aName=${encodeURIComponent(earlier.name)}&b=${later.mbid}&bName=${encodeURIComponent(later.name)}`}
+              >
+                🎚 Morph these two
+              </Link>
             </div>
             <ArtistCard view={later} role="descendant" audioRef={later === result.a ? audioA : audioB} />
           </div>
