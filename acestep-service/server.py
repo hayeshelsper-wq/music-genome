@@ -158,8 +158,14 @@ def generate(req: GenerateReq):
             config = GenerationConfig()
             result = generate_music(_dit, _llm, params, config, save_dir=None)
 
-        tensor = result.tensor
-        sr = int(getattr(result, "sample_rate", 48000))
+        # upstream: acestep/inference.py@6d467e4 — GenerationResult.audios is a
+        # list of {"path","tensor","key","sample_rate","params"}; tensor is
+        # [channels, samples] CPU float32.
+        if not getattr(result, "success", True) or not result.audios:
+            raise RuntimeError(getattr(result, "error", None) or "generation returned no audio")
+        audio0 = result.audios[0]
+        tensor = audio0["tensor"]
+        sr = int(audio0.get("sample_rate", 48000))
         wav = tensor.detach().cpu().numpy() if hasattr(tensor, "detach") else np.asarray(tensor)
         if wav.ndim == 2:  # [channels, samples] -> [samples, channels]
             wav = wav.T
