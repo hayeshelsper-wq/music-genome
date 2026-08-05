@@ -11,7 +11,8 @@ const AUDIO_SERVICE = process.env.AUDIO_SERVICE_URL || "http://127.0.0.1:8000";
 export async function generateMusic(
   prompt: string,
   durationSec = 10,
-  timeoutMs = 240_000
+  timeoutMs = 240_000,
+  seed: number | null = null
 ): Promise<Buffer> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -20,7 +21,11 @@ export async function generateMusic(
     const res = await fetch(`${MUSICGEN_URL}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...auth },
-      body: JSON.stringify({ prompt, duration_sec: durationSec }),
+      body: JSON.stringify({
+        prompt,
+        duration_sec: durationSec,
+        ...(seed != null ? { seed } : {}),
+      }),
       signal: ctrl.signal,
     });
     if (!res.ok) {
