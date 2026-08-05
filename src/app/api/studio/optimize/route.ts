@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
 import { analyzeClip } from "@/lib/musicgen";
 import { generate, Engine } from "@/lib/generation";
 import { scoreDna, Scorecard } from "@/lib/genomePrompt";
-import { composeStudioPrompt } from "@/lib/studioPrompt";
+import { composeStudioPromptForEngine } from "@/lib/studioPrompt";
 import { buildReference, centerCutWav } from "@/lib/studioRun";
 import { critiqueAndRevise } from "@/lib/studioCritic";
 import {
@@ -75,9 +75,10 @@ export async function POST(req: NextRequest) {
       let runCreated = false;
       try {
         const reference = await buildReference(source);
-        const composed = await composeStudioPrompt(reference);
+        const composed = await composeStudioPromptForEngine(reference, engine, lyrics);
         let prompt = composed.prompt;
         let promptSource: string = composed.source;
+        const effectiveLyrics = composed.lyrics;
 
         await createStudioRun({
           id: runId,
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
             prompt,
             durationSec,
             seed,
-            lyrics,
+            lyrics: effectiveLyrics,
             loraGcs,
             timeoutMs: 300_000,
           });

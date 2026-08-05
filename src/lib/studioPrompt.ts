@@ -61,6 +61,71 @@ export function dspFacts(f: TrackFeatures): string {
 
 export type PromptSource = "claude+flamingo" | "claude" | "template";
 
+const ACESTEP_SYSTEM = `You prepare inputs for ACE-Step, a full-song text-to-music model that takes STYLE TAGS and LYRICS. You are given a detailed analysis of a reference recording.
+
+Rules:
+- "tags": comma-separated style descriptors, NOT prose. Genre, subgenre, instruments and how they're played, production space, mood, tempo feel, era. 8-16 tags. Example: "indie rock, jangly electric guitars, driving 8th-note bass, live drum kit, warm analog production, melancholic, mid-tempo, 90s".
+- "lyrics": if CALLER LYRICS are provided below, use them verbatim. Otherwise write ORIGINAL lyrics (verse/chorus with [verse]/[chorus] section tags) that capture the artist's themes and voice from the analysis. NEVER copy or paraphrase the reference track's actual lyrics — original words only. For instrumental references output "[inst]".
+- Tempo may be octave-off in the measurements; trust the feel words.
+
+Output ONLY minified JSON: {"tags":"...","lyrics":"..."}
+No markdown, no code fences.`;
+
+/** Engine-aware prompt composition. musicgen keeps the existing prose-prompt
+ *  path untouched; acestep gets tags+lyrics JSON. */
+export async function composeStudioPromptForEngine(
+  ref: Reference,
+  engine: string,
+  callerLyrics?: string | null
+): Promise<{ prompt: string; lyrics: string | null; model: string; source: PromptSource }> {
+  if (engine !== "acestep") {
+    const base = await composeStudioPrompt(ref);
+    return { ...base, lyrics: callerLyrics ?? null };
+  }
+
+  const facts = [
+    `Reference: ${ref.label}${ref.artist ? ` — ${ref.artist}` : ""}`,
+    "",
+    callerLyrics ? `CALLER LYRICS (use verbatim):\n${callerLyrics.slice(0, 4000)}` : "",
+    "",
+    ref.flamingo ? `AI LISTENER read:\n${String(ref.flamingo).slice(0, 4000)}` : "",
+    "",
+    tagFacts(ref.tags),
+    "",
+    dspFacts(ref.features),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const fallbackTags = buildPrompt(ref)
+    .replace(/\.\s+/g, ", ")
+    .replace(/\.$/, "")
+    .toLowerCase();
+
+  try {
+    const llm = bestSynthesisLlm();
+    const raw = (await complete(ACESTEP_SYSTEM, facts, llm))
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "");
+    const j = JSON.parse(raw) as { tags?: string; lyrics?: string };
+    if (!j.tags) throw new Error("no tags");
+    return {
+      prompt: j.tags,
+      lyrics: callerLyrics || j.lyrics || "[inst]",
+      model: llm.model ?? "",
+      source: ref.flamingo ? "claude+flamingo" : "claude",
+    };
+  } catch {
+    return {
+      prompt: fallbackTags,
+      lyrics: callerLyrics || "[inst]",
+      model: "",
+      source: "template",
+    };
+  }
+}
+
 /** Compose the MusicGen prompt for a reference, preferring a Flamingo-grounded
  *  Claude write-up and falling back to the pure-DSP template. */
 export async function composeStudioPrompt(

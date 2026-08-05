@@ -7,10 +7,13 @@
 //    DSP features + CLAP embedding) and score how close it landed.
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { generateMusic, analyzeClip } from "@/lib/musicgen";
+import { generate } from "@/lib/generation";
 import { scoreDna } from "@/lib/genomePrompt";
-import { composeStudioPrompt } from "@/lib/studioPrompt";
-import { buildReference } from "@/lib/studioRun";
+import { composeStudioPrompt, composeStudioPromptForEngine } from "@/lib/studioPrompt";
+import { buildReference, centerCutWav } from "@/lib/studioRun";
+import { uploadAudio, signedOrProxyUrl } from "@/lib/storage";
 import { TrackFeatures } from "@/lib/trackReview";
 
 export const runtime = "nodejs";
@@ -37,7 +40,15 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  let body: { source?: { kind: string; id?: string; mbid?: string }; durationSec?: number };
+  let body: {
+    source?: { kind: string; id?: string; mbid?: string };
+    durationSec?: number;
+    // Opt-in V2 params — omitted by the classic client, so the original
+    // musicgen contract is untouched.
+    engine?: "musicgen" | "acestep";
+    lyrics?: string;
+    loraGcs?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -45,21 +56,58 @@ export async function POST(req: NextRequest) {
   }
   const source = body.source;
   if (!source?.kind) return NextResponse.json({ error: "source required" }, { status: 400 });
-  const durationSec = Math.max(4, Math.min(15, body.durationSec || 10));
+  const engine = body.engine === "acestep" ? "acestep" : "musicgen";
+  const durationSec =
+    engine === "acestep"
+      ? Math.max(10, Math.min(120, body.durationSec || 60))
+      : Math.max(4, Math.min(15, body.durationSec || 10));
 
   try {
     const reference = await buildReference(source);
-    const { prompt, source: promptSource, model: promptModel } =
-      await composeStudioPrompt(reference);
-
-    const wav = await generateMusic(prompt, durationSec);
-    const gen = await analyzeClip(wav);
+    let prompt: string;
+    let promptSource: string;
+    let promptModel: string;
+    let wav: Buffer;
+    if (engine === "acestep") {
+      const composed = await composeStudioPromptForEngine(reference, "acestep", body.lyrics);
+      prompt = composed.prompt;
+      promptSource = composed.source;
+      promptModel = composed.model;
+      wav = await generate("acestep", {
+        prompt,
+        durationSec,
+        lyrics: composed.lyrics,
+        loraGcs: body.loraGcs || null,
+        timeoutMs: 300_000,
+      });
+    } else {
+      const composed = await composeStudioPrompt(reference);
+      prompt = composed.prompt;
+      promptSource = composed.source;
+      promptModel = composed.model;
+      wav = await generateMusic(prompt, durationSec);
+    }
+    const toAnalyze =
+      engine === "acestep" && durationSec > 30 ? centerCutWav(wav, 30) : wav;
+    const gen = await analyzeClip(toAnalyze);
     if (!gen.features) throw new Error("generated clip analysis returned no features");
 
     const scorecard = scoreDna(reference, {
       features: gen.features,
       embedding: gen.embedding,
     });
+
+    // Long ACE-Step clips would be a ~20MB base64 data URL — store those in
+    // GCS and hand back the app-proxied URL instead. The musicgen path keeps
+    // its original inline data-URL contract.
+    let clip = "";
+    if (engine === "acestep") {
+      const path = `studio-runs/oneshot-${randomUUID()}.wav`;
+      await uploadAudio(path, wav, "audio/wav");
+      clip = signedOrProxyUrl(path);
+    } else {
+      clip = `data:audio/wav;base64,${wav.toString("base64")}`;
+    }
 
     return NextResponse.json({
       prompt,
@@ -79,7 +127,7 @@ export async function POST(req: NextRequest) {
         durationSec,
       },
       scorecard,
-      clip: `data:audio/wav;base64,${wav.toString("base64")}`,
+      clip,
     });
   } catch (e) {
     return NextResponse.json(

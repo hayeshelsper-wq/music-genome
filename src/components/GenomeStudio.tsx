@@ -53,6 +53,14 @@ interface RunSummary {
   best: number;
 }
 
+interface LoraItem {
+  id: string;
+  label: string;
+  status: "queued" | "training" | "ready" | "error";
+  gcsPath: string;
+  error?: string;
+}
+
 type OptStatus = "idle" | "running" | "done" | "error";
 
 function PromptDiff({ prev, curr }: { prev: string | null; curr: string }) {
@@ -154,6 +162,26 @@ export default function GenomeStudio() {
   const [pastRuns, setPastRuns] = useState<RunSummary[]>([]);
   const [viewingRun, setViewingRun] = useState<{ label: string; engine: string } | null>(null);
 
+  // Engine + voice (ACE-Step LoRA) selection.
+  const [engine, setEngine] = useState<"musicgen" | "acestep">("musicgen");
+  const [durationSec, setDurationSec] = useState(10);
+  const [lyrics, setLyrics] = useState("");
+  const [loras, setLoras] = useState<LoraItem[]>([]);
+  const [voiceId, setVoiceId] = useState<string>("");
+  const [voiceLabel, setVoiceLabel] = useState("");
+  const [voiceUploads, setVoiceUploads] = useState<Set<string>>(new Set());
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+
+  const acestepAvailable = true; // server rejects cleanly if ACESTEP_URL unset
+
+  const refreshLoras = useCallback(() => {
+    fetch("/api/loras")
+      .then((r) => (r.ok ? r.json() : { loras: [] }))
+      .then((d) => setLoras(d.loras || []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch("/api/uploads")
       .then((r) => r.json())
@@ -163,7 +191,43 @@ export default function GenomeStudio() {
       .then((r) => r.json())
       .then((d) => setPastRuns(d.runs || []))
       .catch(() => {});
-  }, []);
+    refreshLoras();
+  }, [refreshLoras]);
+
+  // Auto-refresh voices while any are queued/training.
+  useEffect(() => {
+    if (!loras.some((l) => l.status === "queued" || l.status === "training")) return;
+    const t = setInterval(refreshLoras, 10_000);
+    return () => clearInterval(t);
+  }, [loras, refreshLoras]);
+
+  // Engine switch resets the duration to that engine's sweet spot.
+  useEffect(() => {
+    setDurationSec(engine === "acestep" ? 60 : 10);
+    if (engine !== "acestep") setVoiceId("");
+  }, [engine]);
+
+  async function trainVoice() {
+    if (!voiceLabel.trim() || voiceUploads.size === 0 || voiceBusy) return;
+    setVoiceBusy(true);
+    setVoiceError("");
+    try {
+      const res = await fetch("/api/loras", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: voiceLabel.trim(), uploadIds: [...voiceUploads] }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) throw new Error(j.error || `failed (${res.status})`);
+      setVoiceLabel("");
+      setVoiceUploads(new Set());
+      refreshLoras();
+    } catch (e) {
+      setVoiceError(e instanceof Error ? e.message : "training request failed");
+    } finally {
+      setVoiceBusy(false);
+    }
+  }
 
   // Read-only view of a past run (?run=<id>).
   useEffect(() => {
@@ -228,6 +292,7 @@ export default function GenomeStudio() {
     const t2 = setTimeout(() => setStage("Generating audio on the GPU (MusicGen)…"), 7000);
     const t3 = setTimeout(() => setStage("Verifying — measuring the generated clip…"), 32000);
     try {
+      const loraGcs = loras.find((l) => l.id === voiceId && l.status === "ready")?.gcsPath;
       const res = await fetch("/api/studio/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -236,6 +301,17 @@ export default function GenomeStudio() {
             picked.kind === "artist"
               ? { kind: "artist", mbid: picked.mbid }
               : { kind: "track", id: picked.id },
+          // Opt-in V2 params; the classic musicgen defaults send none of them.
+          ...(engine === "acestep"
+            ? {
+                engine,
+                durationSec,
+                ...(lyrics.trim() ? { lyrics: lyrics.trim() } : {}),
+                ...(loraGcs ? { loraGcs } : {}),
+              }
+            : durationSec !== 10
+            ? { durationSec }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -268,6 +344,7 @@ export default function GenomeStudio() {
     const patchAttempt = (i: number, fn: (a: OptAttempt) => OptAttempt) =>
       setAttempts((prev) => prev.map((a) => (a.i === i ? fn(a) : a)));
 
+    const loraGcs = loras.find((l) => l.id === voiceId && l.status === "ready")?.gcsPath;
     await streamNdjson(
       "/api/studio/optimize",
       {
@@ -278,6 +355,10 @@ export default function GenomeStudio() {
             picked.kind === "artist"
               ? { kind: "artist", mbid: picked.mbid }
               : { kind: "track", id: picked.id },
+          engine,
+          durationSec,
+          ...(engine === "acestep" && lyrics.trim() ? { lyrics: lyrics.trim() } : {}),
+          ...(engine === "acestep" && loraGcs ? { loraGcs } : {}),
         }),
       },
       (obj) => {
@@ -339,7 +420,7 @@ export default function GenomeStudio() {
         setBusy(false);
       }
     );
-  }, [picked, busy]);
+  }, [picked, busy, engine, durationSec, lyrics, loras, voiceId]);
 
   const chip = statusChip(optStatus, stopReason);
   const dnaSeries = attempts
@@ -432,6 +513,56 @@ export default function GenomeStudio() {
           >
             Optimize
           </button>
+        </div>
+
+        <div className="studio-engine">
+          <label className="studio-engine-field">
+            <span className="muted">Engine</span>
+            <select
+              value={engine}
+              onChange={(e) => setEngine(e.target.value as "musicgen" | "acestep")}
+            >
+              <option value="musicgen">MusicGen — sketch (≤15s)</option>
+              {acestepAvailable && (
+                <option value="acestep">ACE-Step — full song w/ lyrics (≤120s)</option>
+              )}
+            </select>
+          </label>
+          <label className="studio-engine-field">
+            <span className="muted">Duration: {durationSec}s</span>
+            <input
+              type="range"
+              min={engine === "acestep" ? 10 : 4}
+              max={engine === "acestep" ? 120 : 15}
+              step={1}
+              value={durationSec}
+              onChange={(e) => setDurationSec(Number(e.target.value))}
+            />
+          </label>
+          {engine === "acestep" && (
+            <label className="studio-engine-field">
+              <span className="muted">Voice</span>
+              <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)}>
+                <option value="">Base</option>
+                {loras
+                  .filter((l) => l.status === "ready")
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          {engine === "acestep" && (
+            <textarea
+              className="studio-lyrics"
+              placeholder="Lyrics (optional — leave blank and Claude writes original lyrics in the artist's style; instrumental = [inst])"
+              value={lyrics}
+              onChange={(e) => setLyrics(e.target.value)}
+              rows={3}
+            />
+          )}
         </div>
 
         <button
@@ -558,6 +689,65 @@ export default function GenomeStudio() {
           </button>
         </div>
       )}
+
+      <div className="studio-voices">
+        <h3>🎤 Voices <span className="muted">(ACE-Step LoRAs trained on your own uploads)</span></h3>
+        {loras.length > 0 && (
+          <div className="voice-list">
+            {loras.map((l) => (
+              <div key={l.id} className="voice-row">
+                <strong>{l.label}</strong>
+                <span className={`opt-chip ${l.status === "ready" ? "ok" : l.status === "error" ? "err" : "running"}`}>
+                  {l.status}
+                </span>
+                {l.status === "error" && l.error && (
+                  <span className="muted" style={{ fontSize: 12 }}>{l.error}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <details className="voice-train">
+          <summary>Train from my library</summary>
+          <input
+            className="search-input"
+            placeholder="Voice name — e.g. 'my demos'"
+            value={voiceLabel}
+            onChange={(e) => setVoiceLabel(e.target.value)}
+          />
+          <div className="studio-uploads">
+            {uploads.length === 0 && <p className="muted">No tracks in your library yet.</p>}
+            {uploads.map((u) => (
+              <button
+                key={u.id}
+                className={`studio-upload ${voiceUploads.has(u.id) ? "on" : ""}`}
+                onClick={() =>
+                  setVoiceUploads((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(u.id)) next.delete(u.id);
+                    else next.add(u.id);
+                    return next;
+                  })
+                }
+              >
+                <strong>{u.title}</strong>
+              </button>
+            ))}
+          </div>
+          <button
+            className="btn-mini"
+            disabled={voiceBusy || !voiceLabel.trim() || voiceUploads.size === 0}
+            onClick={trainVoice}
+          >
+            {voiceBusy ? "…" : `Train on ${voiceUploads.size} track${voiceUploads.size === 1 ? "" : "s"}`}
+          </button>
+          {voiceError && <div className="studio-error">⚠️ {voiceError}</div>}
+          <p className="muted" style={{ fontSize: 12 }}>
+            Training runs as a GPU job (~30–60 min). Only your own uploads can be
+            used — never catalog previews.
+          </p>
+        </details>
+      </div>
 
       {pastRuns.length > 0 && (
         <div className="studio-runs">
