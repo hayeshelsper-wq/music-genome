@@ -7,11 +7,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsndfile1 git && rm -rf /var/lib/apt/lists/*
 
-# nano-vllm is vendored inside the repo — install it first (see acestep-service).
+# nano-vllm is vendored; torch pin needs the cu128 index (see acestep-service).
 RUN git clone https://github.com/ace-step/ACE-Step-1.5 /opt/acestep && \
     cd /opt/acestep && git checkout 6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0 && \
-    pip install --no-cache-dir ./acestep/third_parts/nano-vllm && \
-    pip install --no-cache-dir . && \
+    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 \
+      ./acestep/third_parts/nano-vllm . && \
     pip install --no-cache-dir google-cloud-firestore google-cloud-storage
 
 ENV HF_HOME=/models

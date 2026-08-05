@@ -9,10 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Upstream is uv-based with no PyPI package, and its nano-vllm dependency is
 # vendored at acestep/third_parts/nano-vllm — install that first, then the repo.
+# ACE-Step pins torch==2.10.0+cu128 (uv index pytorch-cu128) — resolve the
+# vendored nano-vllm and the repo in ONE pass with PyTorch's cu128 wheel index.
 RUN git clone https://github.com/ace-step/ACE-Step-1.5 /opt/acestep && \
     cd /opt/acestep && git checkout 6d467e4b5081ccb0abf1ec1bf4fdf9051a2d34b0 && \
-    pip install --no-cache-dir ./acestep/third_parts/nano-vllm && \
-    pip install --no-cache-dir . && \
+    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 \
+      ./acestep/third_parts/nano-vllm . && \
     pip install --no-cache-dir fastapi "uvicorn[standard]" soundfile google-cloud-storage
 
 # Bake the base DiT + smallest 5Hz LM (L4-friendly resident pair). The bundle
