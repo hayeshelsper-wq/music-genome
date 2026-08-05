@@ -48,8 +48,14 @@ agent during the V2 build (2026‑08‑05); ⬜ items need you.
   prod, so a second public service **`audio-ws`** (same image,
   `PUBLIC_WS_ONLY=1` — only `/mrt/session` + `/health` reachable) fronts the
   browser; `NEXT_PUBLIC_AUDIO_WS` bakes its URL into the web bundle.
-- ✅ MRT memory: JAX + MusicCoCa‑TF fight over the L4 →
-  `XLA_PYTHON_CLIENT_MEM_FRACTION=0.55, TF_FORCE_GPU_ALLOW_GROWTH=true`.
+- ✅ MRT is LIVE (image `v2-mrt-7`) after four fixes: authenticated HF weight
+  bake; MusicCoCa TFLite calls serialized on one dedicated thread (concurrent
+  invokes crash); `XLA_PYTHON_CLIENT_PREALLOCATE=false` +
+  `TF_GPU_ALLOCATOR=cuda_malloc_async`; generation paced to `MRT_AHEAD_S=4`
+  so the fader responds in ~6s (tune `CHUNK_S=1.0` + `MRT_AHEAD_S=2` for ~3s).
+  **Runs `mrt2_small`** — `mrt2_base`'s 8.13GiB style‑embed allocation does not
+  fit a 24GB L4 next to the generator; bigger‑GPU follow‑up if base quality is
+  wanted.
 - ⬜ **acestep image bake is incomplete**: the handler downloads the actual
   DiT/LM checkpoints (~10GB across several HF repos) at cold start, which
   scale‑to‑zero re‑pays every time. Interim: `HF_TOKEN` + `--no-cpu-throttling`
