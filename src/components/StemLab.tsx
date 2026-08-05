@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import PianoRoll, { RollNote } from "./PianoRoll";
 
 interface StemData {
   stems: Record<string, string>;
@@ -47,6 +48,31 @@ export default function StemLab({
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState<Record<string, boolean>>({});
   const [solo, setSolo] = useState<string | null>(null);
+  const [roll, setRoll] = useState<RollNote[] | null>(null);
+  const [rollOpen, setRollOpen] = useState(false); // collapsed by default
+  const [rollBusy, setRollBusy] = useState(false);
+  const [rollError, setRollError] = useState<string | null>(null);
+
+  async function loadRoll() {
+    setRollOpen(true);
+    if (roll || rollBusy) return;
+    setRollBusy(true);
+    setRollError(null);
+    try {
+      const res = await fetch("/api/track/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ previewUrl, artist, title, mode: "melody" }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) throw new Error(j.error || `failed (${res.status})`);
+      setRoll(j.notes || []);
+    } catch (e) {
+      setRollError(e instanceof Error ? e.message : "transcription failed");
+    } finally {
+      setRollBusy(false);
+    }
+  }
 
   // All stems play through ONE Web Audio clock so they stay sample-accurately in
   // sync (four independent <audio> elements drift apart). Each stem gets its own
@@ -343,6 +369,27 @@ export default function StemLab({
               <span className="vfp">{data.melody.fingerprint.vibrato}</span>
               <span className="vfp">{data.melody.fingerprint.breathiness}</span>
             </div>
+          )}
+          {!rollOpen ? (
+            <button className="stem-toggle" style={{ marginTop: 8 }} onClick={loadRoll}>
+              ♪ Piano roll (transcribed notes)
+            </button>
+          ) : rollBusy ? (
+            <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              <span className="spinner" /> transcribing…
+            </div>
+          ) : rollError ? (
+            <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>⚠️ {rollError}</div>
+          ) : (
+            roll && (
+              <div style={{ marginTop: 8 }}>
+                <PianoRoll
+                  notes={roll}
+                  durationSec={duration || Math.max(1, ...roll.map((n) => n.e))}
+                  currentTime={time}
+                />
+              </div>
+            )
           )}
         </div>
         <div className="stem-card">

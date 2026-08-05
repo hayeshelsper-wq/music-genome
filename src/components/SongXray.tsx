@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StemLab from "./StemLab";
+import PianoRoll, { RollNote } from "./PianoRoll";
 
 interface Features {
   tempo_bpm: number;
@@ -72,12 +73,47 @@ export default function SongXray({
   const [data, setData] = useState<Analysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showStems, setShowStems] = useState(false);
+  const [melody, setMelody] = useState<{
+    notes: RollNote[];
+    stem: string;
+    source: string;
+    midiUrl: string | null;
+  } | null>(null);
+  const [melodyBusy, setMelodyBusy] = useState(false);
+  const [melodyError, setMelodyError] = useState<string | null>(null);
+
+  async function transcribeMelody() {
+    if (melodyBusy) return;
+    setMelodyBusy(true);
+    setMelodyError(null);
+    try {
+      const res = await fetch("/api/track/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ previewUrl, artist, title, mode: "melody" }),
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) throw new Error(j.error || `failed (${res.status})`);
+      setMelody({
+        notes: j.notes || [],
+        stem: j.stem,
+        source: j.source,
+        midiUrl: j.midiUrl || null,
+      });
+    } catch (e) {
+      setMelodyError(e instanceof Error ? e.message : "transcription failed");
+    } finally {
+      setMelodyBusy(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
     setData(null);
     setError(null);
     setShowStems(false);
+    setMelody(null);
+    setMelodyError(null);
     (async () => {
       try {
         const qs = `previewUrl=${encodeURIComponent(previewUrl)}&title=${encodeURIComponent(
@@ -388,6 +424,50 @@ export default function SongXray({
           <div className="xray-lyricsheet-body">{renderLyrics(data.fullLyrics)}</div>
         </div>
       )}
+
+      {/* Melody — symbolic transcription of the lead line (basic-pitch on the
+          Demucs vocal stem), rendered as a piano roll + downloadable MIDI. */}
+      <div className="xray-melody" style={{ marginTop: 18 }}>
+        <div className="xray-section-head">
+          <span className="stat-label">🎼 Melody</span>
+          <SourceTag kind="measured" />
+        </div>
+        {melody ? (
+          <>
+            <PianoRoll
+              notes={melody.notes}
+              durationSec={Math.max(1, ...melody.notes.map((n) => n.e))}
+            />
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              {melody.notes.length} notes · transcribed from the {melody.stem} stem (
+              {melody.source}) · click a note to hear it
+              {melody.midiUrl && (
+                <>
+                  {" · "}
+                  <a href={melody.midiUrl}>⬇ Download MIDI</a>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <div>
+            <button className="btn-mini ghost" disabled={melodyBusy} onClick={transcribeMelody}>
+              {melodyBusy ? (
+                <>
+                  <span className="spinner" /> Transcribing (Demucs + basic-pitch)…
+                </>
+              ) : (
+                "🎼 Transcribe the melody"
+              )}
+            </button>
+            {melodyError && (
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                ⚠️ {melodyError}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Stem Lab (Demucs) — opt-in, it's GPU-heavy */}
       <div style={{ marginTop: 18 }}>
