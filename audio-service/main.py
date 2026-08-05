@@ -23,7 +23,7 @@ from typing import Optional
 
 import librosa
 import numpy as np
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -534,6 +534,112 @@ async def upload(file: UploadFile = File(...)):
     finally:
         if os.path.exists(path):
             os.unlink(path)
+
+
+def _stem_for_melody(url: str) -> tuple[str, str]:
+    """Demucs (cached via stems.key_for) → the vocals stem path, falling back to
+    'other' when the vocal stem is essentially silent (< -45 dBFS RMS)."""
+    key = stemlib.key_for(url)
+    vocals_path = os.path.join(stemlib.STEM_DIR, key, "vocals.wav")
+    if not os.path.exists(vocals_path):
+        path = None
+        try:
+            path = _download(url)
+            sources, sr = stemlib.separate(path)
+            stemlib.save_stems(sources, sr, key)
+        finally:
+            if path and os.path.exists(path):
+                os.unlink(path)
+    y, _sr = librosa.load(vocals_path, sr=22050, mono=True)
+    rms = float(np.sqrt(np.mean(y**2)) + 1e-12)
+    dbfs = 20.0 * np.log10(rms)
+    if dbfs < -45.0:
+        other = os.path.join(stemlib.STEM_DIR, key, "other.wav")
+        if os.path.exists(other):
+            return other, "other"
+    return vocals_path, "vocals"
+
+
+@app.post("/transcribe")
+async def transcribe_symbolic(request: Request):
+    """Symbolic transcription → notes + composition DNA + MIDI.
+
+    JSON: {previewUrl?|uploadUrl?, mode: "melody"|"full"|"mono", key_root?: int}
+    Multipart (hums): file=<webm/mp4/m4a>, mode?, key_root? form fields.
+    """
+    import transcribe as tsc  # lazy — basic-pitch/pretty_midi load on demand
+
+    ctype = request.headers.get("content-type", "")
+    cleanup: list = []
+    mode = "melody"
+    key_root = 0
+    src_path: Optional[str] = None
+    src_url: Optional[str] = None
+    try:
+        if ctype.startswith("multipart/"):
+            form = await request.form()
+            up = form.get("file")
+            if up is None:
+                return {"error": "file field required"}
+            mode = str(form.get("mode") or "mono")
+            try:
+                key_root = int(str(form.get("key_root") or 0))
+            except ValueError:
+                key_root = 0
+            suffix = os.path.splitext(getattr(up, "filename", "") or "")[1] or ".webm"
+            fd, src_path = tempfile.mkstemp(suffix=suffix)
+            with os.fdopen(fd, "wb") as f:
+                f.write(await up.read())
+            cleanup.append(src_path)
+        else:
+            body = await request.json()
+            mode = str(body.get("mode") or "melody")
+            key_root = int(body.get("key_root") or 0)
+            src_url = body.get("previewUrl") or body.get("uploadUrl")
+            if not src_url:
+                return {"error": "previewUrl or uploadUrl required"}
+
+        stem = "mix"
+        if mode == "melody":
+            if not src_url:
+                return {"error": "melody mode needs a URL source"}
+            stem_path, stem = _stem_for_melody(src_url)
+            result = tsc.transcribe_polyphonic(stem_path)
+            if src_path is None:
+                src_path = _download(src_url)
+                cleanup.append(src_path)
+        else:
+            if src_path is None:
+                src_path = _download(src_url)
+                cleanup.append(src_path)
+            if mode == "mono":
+                stem = "raw"
+                result = tsc.transcribe_monophonic(src_path)
+            else:
+                result = tsc.transcribe_polyphonic(src_path)
+
+        notes = result["notes"]
+        y, sr = librosa.load(src_path, sr=22050, mono=True)
+        tempo, _beats = librosa.beat.beat_track(y=y, sr=sr)
+        bpm = float(np.atleast_1d(tempo)[0]) or None
+
+        out = {
+            "notes": notes,
+            "source": result["source"],
+            "stem": stem,
+            "dna": tsc.melodic_dna(notes, key_root=key_root),
+            "midi_b64": tsc.to_midi_b64(notes, bpm),
+            "bpm": round(bpm, 1) if bpm else None,
+        }
+        if mode == "mono" and bpm:
+            out["notes_quantized"] = tsc.quantize_notes(notes, bpm)
+        return out
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:200], "notes": []}
+    finally:
+        for p in cleanup:
+            if p and os.path.exists(p):
+                os.unlink(p)
 
 
 @app.post("/flamingo-clip")

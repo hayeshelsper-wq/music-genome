@@ -14,4 +14,7 @@ python-multipart>=0.0.9  # FastAPI file uploads (/upload endpoint)
 essentia-tensorflow==2.1b6.dev858  # Discogs-EffNet + MTG-Jamendo discriminative taggers
 transformers>=4.40,<5   # LAION music-CLAP (text+audio embeddings) for sonic search/twins
 pyrubberband>=0.3   # Mashup Lab: HQ time-stretch/pitch-shift (wraps the rubberband-cli binary)
+basic-pitch[onnx]>=0.4.0  # Symbolic layer (V2): polyphonic transcription. ONNX extra keeps the
+                          # image slim — on Linux/py3.10 the base install would pull full TF.
+pretty_midi>=0.2.10       # note lists <-> .mid (basic-pitch already depends on it; pin explicitly)
 # torch + torchaudio come with demucs; on Apple Silicon they use the MPS GPU
