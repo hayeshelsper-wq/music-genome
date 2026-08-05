@@ -7,81 +7,16 @@
 //    DSP features + CLAP embedding) and score how close it landed.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getUpload, getUploadVector, getReport, isIngested } from "@/lib/store";
-import { ingestArtist } from "@/lib/ingest";
-import { getTopTracks } from "@/lib/itunes";
-import { cloudRunAuthHeader } from "@/lib/cloudRun";
 import { generateMusic, analyzeClip } from "@/lib/musicgen";
-import { scoreDna, Reference } from "@/lib/genomePrompt";
+import { scoreDna } from "@/lib/genomePrompt";
 import { composeStudioPrompt } from "@/lib/studioPrompt";
-import { callFlamingo } from "@/lib/trackAudio";
+import { buildReference } from "@/lib/studioRun";
 import { TrackFeatures } from "@/lib/trackReview";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Generation on a cold L4 (model load) + analysis can run long; give it room.
 export const maxDuration = 300;
-
-const AUDIO_SERVICE = process.env.AUDIO_SERVICE_URL || "http://127.0.0.1:8000";
-
-async function analyzePreview(
-  previewUrl: string
-): Promise<{ features: TrackFeatures; embedding?: number[] | null; tags?: unknown }> {
-  const auth = await cloudRunAuthHeader(AUDIO_SERVICE);
-  const res = await fetch(`${AUDIO_SERVICE}/analyze`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...auth },
-    body: JSON.stringify({ previewUrl }),
-  });
-  if (!res.ok) throw new Error(`audio-service /analyze ${res.status}`);
-  return (await res.json()) as { features: TrackFeatures; embedding?: number[] | null };
-}
-
-async function buildReference(source: {
-  kind: string;
-  id?: string;
-  mbid?: string;
-}): Promise<Reference> {
-  if (source.kind === "track") {
-    const rec = await getUpload(source.id || "");
-    if (!rec || !rec.features) throw new Error("track not found or not analyzed");
-    const embedding = await getUploadVector(source.id || "");
-    return {
-      label: rec.title,
-      artist: rec.artist,
-      kind: "track",
-      features: rec.features as TrackFeatures,
-      tags: rec.tags,
-      embedding,
-      // The upload pipeline already ran Flamingo and stored its read — reuse it
-      // (no extra GPU call) so Claude can write a prompt grounded in what the
-      // track actually sounds like.
-      flamingo: rec.flamingo || null,
-    };
-  }
-  // artist: use a representative top track as the measurable reference.
-  const mbid = source.mbid || "";
-  if (!(await isIngested(mbid))) await ingestArtist(mbid);
-  const report = await getReport(mbid);
-  if (!report) throw new Error("artist not found");
-  const tracks = await getTopTracks(report.artist.name);
-  const top = tracks.find((t) => t.previewUrl);
-  if (!top?.previewUrl) throw new Error("no playable tracks for this artist");
-  const a = await analyzePreview(top.previewUrl);
-  if (!a.features) throw new Error("could not analyze the reference track");
-  // Best-effort Flamingo read of the preview (skipped if the GPU is cold — the
-  // prompt composer falls back to DSP+tags). Never block generation on it.
-  const fl = await callFlamingo(top.previewUrl, { requireWarm: false }).catch(() => ({ text: "" }));
-  return {
-    label: top.title,
-    artist: report.artist.name,
-    kind: "artist",
-    features: a.features,
-    tags: (a as { tags?: Reference["tags"] }).tags ?? null,
-    embedding: a.embedding,
-    flamingo: fl.text || null,
-  };
-}
 
 function pickFeatures(f: TrackFeatures) {
   return {
