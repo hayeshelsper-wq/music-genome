@@ -13,6 +13,39 @@ import { TrackFeatures } from "./trackReview";
 
 const AUDIO_SERVICE = process.env.AUDIO_SERVICE_URL || "http://127.0.0.1:8000";
 
+/** Slice a PCM16 WAV buffer down to its middle `seconds` — long ACE-Step clips
+ *  are scored on a center cut so the analysis window matches what the 30s
+ *  reference previews measure. Non-PCM16 (or short) input is returned whole. */
+export function centerCutWav(buf: Buffer, seconds: number): Buffer {
+  if (buf.length < 44) return buf;
+  if (
+    buf.toString("ascii", 0, 4) !== "RIFF" ||
+    buf.toString("ascii", 8, 12) !== "WAVE" ||
+    buf.toString("ascii", 36, 40) !== "data"
+  ) {
+    return buf;
+  }
+  const audioFormat = buf.readUInt16LE(20);
+  const channels = buf.readUInt16LE(22);
+  const sampleRate = buf.readUInt32LE(24);
+  const bitsPerSample = buf.readUInt16LE(34);
+  if (audioFormat !== 1 || bitsPerSample !== 16 || !channels || !sampleRate) return buf;
+
+  const dataSize = Math.min(buf.readUInt32LE(40), buf.length - 44);
+  const data = buf.subarray(44, 44 + dataSize);
+  const frameBytes = channels * 2;
+  const wantBytes = Math.floor((seconds * sampleRate)) * frameBytes;
+  if (data.length <= wantBytes) return buf;
+
+  const startRaw = Math.floor((data.length - wantBytes) / 2);
+  const start = startRaw - (startRaw % frameBytes);
+  const cut = data.subarray(start, start + wantBytes);
+  const header = Buffer.from(buf.subarray(0, 44));
+  header.writeUInt32LE(36 + cut.length, 4);
+  header.writeUInt32LE(cut.length, 40);
+  return Buffer.concat([header, cut]);
+}
+
 export async function analyzePreview(
   previewUrl: string
 ): Promise<{ features: TrackFeatures; embedding?: number[] | null; tags?: unknown }> {
