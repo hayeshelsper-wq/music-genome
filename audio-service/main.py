@@ -40,6 +40,22 @@ app.add_middleware(
 )
 app.mount("/stemfiles", StaticFiles(directory=stemlib.STEM_DIR), name="stemfiles")
 
+# PUBLIC_WS_ONLY=1: this instance is the browser-facing crossfader endpoint (a
+# second Cloud Run service from the same image, allow-unauthenticated). Only
+# the token-gated WS proxy + health are reachable; everything else 403s so the
+# public surface can't be used to burn CPU. The main audio-service stays IAM-
+# gated for the web app's server-side calls.
+if os.environ.get("PUBLIC_WS_ONLY"):
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    _WS_ALLOWED = ("/mrt/session", "/health")
+
+    @app.middleware("http")
+    async def _public_ws_only(request, call_next):  # noqa: ANN001
+        if request.url.path not in _WS_ALLOWED:
+            return _JSONResponse({"error": "not available on this endpoint"}, status_code=403)
+        return await call_next(request)
+
 import flamingo
 import tagger
 import clap
