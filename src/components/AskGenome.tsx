@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { streamNdjson } from "@/lib/ndjson";
 
 // Friendly labels + icons for the tool-activity chips the agent emits mid-turn.
 const TOOL_META: Record<string, { icon: string; label: (i: any) => string }> = {
@@ -116,81 +117,57 @@ export default function AskGenome() {
         return copy;
       });
 
-    try {
-      const res = await fetch("/api/ask", {
+    await streamNdjson(
+      "/api/ask",
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, history }),
-      });
-      if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({}));
+      },
+      (obj) => {
+        const ev = obj as any;
+        if (ev.t === "token") {
+          patchLast((m) => ({ ...m, text: m.text + ev.v }));
+        } else if (ev.t === "tool") {
+          patchLast((m) => ({
+            ...m,
+            // If the model wrote a preamble before this tool call, break the
+            // paragraph so its post-tool continuation doesn't run on (".Radiohead").
+            text:
+              m.text && !/\n\n$/.test(m.text) ? m.text + "\n\n" : m.text,
+            tools: [...(m.tools || []), { name: ev.name, input: ev.input }],
+          }));
+        } else if (ev.t === "tool_done") {
+          patchLast((m) => {
+            const tools = [...(m.tools || [])];
+            for (let i = tools.length - 1; i >= 0; i--)
+              if (tools[i].name === ev.name && tools[i].ok === undefined) {
+                tools[i] = { ...tools[i], ok: ev.ok };
+                break;
+              }
+            return { ...m, tools };
+          });
+        } else if (ev.t === "error") {
+          patchLast((m) => ({
+            ...m,
+            text: m.text + `\n\n⚠️ ${ev.v}`,
+            streaming: false,
+          }));
+        } else if (ev.t === "done") {
+          patchLast((m) => ({ ...m, streaming: false }));
+        }
+      },
+      undefined,
+      (e) => {
         patchLast((m) => ({
           ...m,
-          text: `⚠️ ${err.error || `request failed (${res.status})`}`,
+          text: m.text ? `${m.text}\n\n⚠️ ${e.message}` : `⚠️ ${e.message}`,
           streaming: false,
         }));
-        return;
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let ev: any;
-          try {
-            ev = JSON.parse(line);
-          } catch {
-            continue;
-          }
-          if (ev.t === "token") {
-            patchLast((m) => ({ ...m, text: m.text + ev.v }));
-          } else if (ev.t === "tool") {
-            patchLast((m) => ({
-              ...m,
-              // If the model wrote a preamble before this tool call, break the
-              // paragraph so its post-tool continuation doesn't run on (".Radiohead").
-              text:
-                m.text && !/\n\n$/.test(m.text) ? m.text + "\n\n" : m.text,
-              tools: [...(m.tools || []), { name: ev.name, input: ev.input }],
-            }));
-          } else if (ev.t === "tool_done") {
-            patchLast((m) => {
-              const tools = [...(m.tools || [])];
-              for (let i = tools.length - 1; i >= 0; i--)
-                if (tools[i].name === ev.name && tools[i].ok === undefined) {
-                  tools[i] = { ...tools[i], ok: ev.ok };
-                  break;
-                }
-              return { ...m, tools };
-            });
-          } else if (ev.t === "error") {
-            patchLast((m) => ({
-              ...m,
-              text: m.text + `\n\n⚠️ ${ev.v}`,
-              streaming: false,
-            }));
-          } else if (ev.t === "done") {
-            patchLast((m) => ({ ...m, streaming: false }));
-          }
-        }
-      }
-    } catch (e) {
-      patchLast((m) => ({
-        ...m,
-        text: m.text + `\n\n⚠️ ${e instanceof Error ? e.message : "failed"}`,
-        streaming: false,
-      }));
-    } finally {
-      patchLast((m) => ({ ...m, streaming: false }));
-      setBusy(false);
-    }
+    );
+    patchLast((m) => ({ ...m, streaming: false }));
+    setBusy(false);
   }
 
   return (
