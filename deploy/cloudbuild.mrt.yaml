@@ -6,13 +6,19 @@ substitutions:
   _TAG: "latest"
 steps:
   - name: gcr.io/cloud-builders/docker
+    secretEnv: ["HF_TOKEN"]
+    env: ["DOCKER_BUILDKIT=1"]   # --mount=type=secret needs BuildKit
+    entrypoint: bash
     args:
-      - "build"
-      - "-t"
-      - "${_AR}/mrt:${_TAG}"
-      - "-f"
-      - "mrt-service/Dockerfile"
-      - "mrt-service"
+      - "-c"
+      - |
+        echo "$$HF_TOKEN" > /tmp/hf_token
+        docker build -t ${_AR}/mrt:${_TAG} -f mrt-service/Dockerfile \
+          --secret id=hf_token,src=/tmp/hf_token mrt-service
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/HF_TOKEN/versions/latest
+      env: HF_TOKEN
 images:
   - "${_AR}/mrt:${_TAG}"
 options:

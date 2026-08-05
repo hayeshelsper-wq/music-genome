@@ -17,10 +17,14 @@ RUN pip install --no-cache-dir "magenta-rt==2.0.3" "jax[cuda12]" \
     fastapi "uvicorn[standard]" websockets soundfile numpy
 
 # Bake the model weights (mrt models download fetches to ~/Documents/Magenta;
-# set HOME so the path is deterministic in the image).
+# set HOME so the path is deterministic in the image). Unauthenticated HF pulls
+# get rate-limited mid-download, so the token is required — and a missing
+# checkpoint must FAIL the build, not ship a weightless image.
 ENV HOME=/models
-RUN mrt models init && mrt models download || \
-    echo "WARN: weight download failed at build — service will fetch at cold start"
+RUN --mount=type=secret,id=hf_token \
+    export HF_TOKEN=$(cat /run/secrets/hf_token) && \
+    mrt models init && mrt models download && \
+    test -f /models/Documents/Magenta/magenta-rt-v2/checkpoints/mrt2_base.safetensors
 
 COPY server.py .
 
