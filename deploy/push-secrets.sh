@@ -40,6 +40,12 @@ for k in SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET LASTFM_API_KEY \
   put "$k" "$(getval "$k")"
 done
 
+# Next Wave (V2): the crossfader's browser→audio-service token secret. The
+# service URLs (ACESTEP_URL / SAM_AUDIO_URL / MRT_URL / MRT_WS_URL) and loop
+# tuning (STUDIO_MAX_ITERS / STUDIO_DNA_THRESHOLD) are plain env vars set at
+# deploy time, not secrets.
+put CROSSFADE_TOKEN_SECRET "${CROSSFADE_TOKEN_SECRET:-$(getval CROSSFADE_TOKEN_SECRET)}"
+
 echo "▸ login gate:"
 AUTH_PASSWORD="${AUTH_PASSWORD:-$(getval AUTH_PASSWORD)}"
 AUTH_SECRET="${AUTH_SECRET:-$(getval AUTH_SECRET)}"

@@ -1,0 +1,28 @@
+# Builds the SAM Audio extraction image (CUDA base + gated HF weights — the
+# build needs HF_TOKEN with the SAM Audio license accepted). Cloned from
+# cloudbuild.musicgen.yaml; Dockerfile lands with sam-audio-service (Phase 3).
+substitutions:
+  _AR: ""        # e.g. us-central1-docker.pkg.dev/PROJECT/music-genome
+  _TAG: "latest"
+steps:
+  - name: gcr.io/cloud-builders/docker
+    secretEnv: ["HF_TOKEN"]
+    args:
+      - "build"
+      - "-t"
+      - "${_AR}/sam-audio:${_TAG}"
+      - "-f"
+      - "sam-audio-service/Dockerfile"
+      - "--secret"
+      - "id=hf_token,env=HF_TOKEN"
+      - "sam-audio-service"
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/HF_TOKEN/versions/latest
+      env: HF_TOKEN
+images:
+  - "${_AR}/sam-audio:${_TAG}"
+options:
+  diskSizeGb: 200
+  machineType: E2_HIGHCPU_8
+timeout: 3600s
