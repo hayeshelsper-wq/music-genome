@@ -4,11 +4,17 @@ Everything a human must do, in order. Items marked ✅ were completed by the
 agent during the V2 build (2026‑08‑05); ⬜ items need you.
 
 ## Licenses / gated weights
-- ⬜ **SAM Audio** — `facebook/sam-audio-base` is **gated (manual access
-  request)** on Hugging Face. Accept the SAM License with the account behind
-  the `HF_TOKEN` secret, then build+deploy `sam-audio-service`
-  (`deploy/cloudbuild.sam.yaml`) and set `SAM_AUDIO_URL` on `web`. Until then
-  the Extract features degrade cleanly (route returns "not configured").
+- ✅ **SAM Audio is LIVE** (image `v2-sam-10`, `SAM_AUDIO_MODEL=facebook/
+  sam-audio-small`, 32Gi). Licenses accepted for the model family AND
+  `facebook/sam-audio-judge`. The working config took six fixes: BuildKit
+  secret bake; cu126-matched torchcodec wheel (PyPI wheel links libnvrtc.so.13);
+  PEP 668 pip on the torch-2.13 base; `huggingface_hub<1.0` pin; judge/imagebind
+  rankers skipped via config override (unused at `reranking_candidates=1` —
+  saves ~5GB); processor fed FILE PATHS (it owns decode via torchcodec).
+  ⬜ Follow-ups: bake the runtime-downloaded encoder checkpoints (~4.5GB
+  re-downloaded per cold start, ~6-8 min; until then the UI's warming retry
+  can lapse — retry once warm), and try `sam-audio-base` again once baked
+  (RAM headroom was the blocker at 32Gi with tmpfs downloads).
 - ✅ **ACE‑Step 1.5** — MIT, weights ungated. No action.
 - ✅ **Magenta RealTime** — code Apache‑2.0, weights **CC‑BY 4.0** (ungated).
   Attribution shipped in the README + /crossfade footer. No action.
