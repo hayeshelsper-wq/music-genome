@@ -53,7 +53,26 @@ export async function GET(req: NextRequest) {
   const title = req.nextUrl.searchParams.get("title") || "";
   const artist = req.nextUrl.searchParams.get("artist") || "";
   if (!previewUrl) return NextResponse.json({ error: "previewUrl required" }, { status: 400 });
-  if (cache.has(previewUrl)) return NextResponse.json(cache.get(previewUrl));
+  // Stem files live on the audio-service instance's tmpfs — a redeploy or
+  // scale-to-zero wipes them while this cache entry lives on, leaving the
+  // player with dead URLs. Validate one file before trusting a hit.
+  const hit = cache.get(previewUrl);
+  if (hit) {
+    try {
+      const probe = Object.values(hit.stems)[0] || "";
+      const p = new URL(probe, "http://x").searchParams.get("p") || "";
+      const auth = await cloudRunAuthHeader(AUDIO);
+      const head = await fetch(`${AUDIO}${p}`, {
+        method: "HEAD",
+        headers: auth,
+        signal: AbortSignal.timeout(8000),
+      });
+      if (head.ok) return NextResponse.json(hit);
+    } catch {
+      // fall through to recompute
+    }
+    cache.delete(previewUrl);
+  }
 
   try {
     const auth = await cloudRunAuthHeader(AUDIO);
