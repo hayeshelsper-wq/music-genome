@@ -162,6 +162,9 @@ def separate(req: SeparateReq):
             out["residual_wav_b64"] = _wav_b64(residual, _sr)
         return out
     except Exception as e:  # noqa: BLE001
+        import traceback
+
+        traceback.print_exc()  # full detail to logs
         return JSONResponse({"error": str(e)[:300]}, status_code=500)
     finally:
         if os.path.exists(path):
