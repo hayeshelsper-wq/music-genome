@@ -45,7 +45,13 @@ def _ensure() -> bool:
             # SAMAudioProcessor from_pretrained + model.separate(batch).
             from sam_audio import SAMAudio, SAMAudioProcessor
 
-            _model = SAMAudio.from_pretrained(MODEL_ID).eval()
+            # upstream: sam_audio/model/base.py — extra kwargs override config
+            # keys. Nulling the rankers skips the judge LLM + ImageBind stacks
+            # (~5GB downloads + RAM) which are only used when
+            # reranking_candidates > 1; we always pass 1.
+            _model = SAMAudio.from_pretrained(
+                MODEL_ID, visual_ranker=None, text_ranker=None
+            ).eval()
             dev = DEVICE if (DEVICE != "cuda" or torch.cuda.is_available()) else "cpu"
             _model = _model.to(dev)
             _proc = SAMAudioProcessor.from_pretrained(MODEL_ID)
