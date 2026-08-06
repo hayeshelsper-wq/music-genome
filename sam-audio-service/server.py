@@ -125,10 +125,15 @@ def separate(req: SeparateReq):
     try:
         with open(path, "wb") as f:
             f.write(raw)
-        # Resample to the model's expected rate, mono, cap length.
-        y, _ = librosa.load(path, sr=_sr, mono=True, duration=MAX_INPUT_SEC)
+        # Cap length, then hand the processor a FILE PATH — it owns decode +
+        # resample via torchcodec; raw 1-D tensors trip its dim handling
+        # ("Dimension specified as -1 but tensor has no dimensions").
+        y, in_sr = librosa.load(path, sr=None, mono=True, duration=MAX_INPUT_SEC)
         if not len(y):
             return JSONResponse({"error": "empty audio"}, status_code=400)
+        import soundfile as sf_mod
+
+        sf_mod.write(path, y, int(in_sr), format="WAV", subtype="PCM_16")
 
         # upstream: facebookresearch/sam-audio@bb4c699 sam_audio/processor.py —
         # __call__(descriptions, audios, anchors=None, ...); anchors are
@@ -138,7 +143,7 @@ def separate(req: SeparateReq):
             anchors = [[("+", float(s), float(e)) for s, e in req.spans]]
         kwargs = {
             "descriptions": [req.text.lower().strip()],
-            "audios": [torch.from_numpy(y)],
+            "audios": [path],
         }
         if anchors:
             kwargs["anchors"] = anchors
