@@ -139,6 +139,15 @@ def generate(req: GenerateReq):
         )
     wav = audio[0, 0].cpu().numpy()
 
+    # Melody-conditioned generations regularly come out several times hotter
+    # than ±1.0; writing that straight to PCM_16 hard-clips ~3% of samples into
+    # harsh, screeching distortion. Peak-normalize anything hot before writing.
+    import numpy as np
+
+    peak = float(np.max(np.abs(wav))) if wav.size else 0.0
+    if peak > 0.99:
+        wav = wav / peak * 0.95
+
     buf = io.BytesIO()
     sf.write(buf, wav, _sr, format="WAV", subtype="PCM_16")
     buf.seek(0)
