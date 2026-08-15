@@ -35,7 +35,10 @@ export default function CrossfadePage() {
           Two artists, one slider, live generated music. The genome embeds each
           artist&apos;s measured style, and a realtime model morphs between them
           as you move the fader — no pre-rendered audio, every second is
-          generated while you listen.
+          generated while you listen. It <strong>improvises new instrumental
+          music</strong> that leans toward each artist&apos;s sonic profile — it
+          doesn&apos;t reproduce their actual songs. First start wakes a GPU
+          and analyzes both artists: allow a minute or two.
         </p>
       </div>
       <Suspense>

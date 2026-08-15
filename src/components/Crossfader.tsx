@@ -76,8 +76,15 @@ export default function Crossfader({
   const start = useCallback(async () => {
     if (!a || !b) return;
     setStage("warming");
-    setStatus("Waking the generator (JAX compile can take ~30s cold)…");
+    setStatus("Waking the generator (first start can take a couple of minutes)…");
     setUnderruns(0);
+
+    // iOS Safari only unmutes an AudioContext created/resumed INSIDE a user
+    // gesture — do it synchronously here, before any await, or mobile playback
+    // stays silently suspended forever.
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    ctxRef.current = ctx;
+    void ctx.resume();
 
     try {
       // 1) Warm the model (poll health until warm-ish; tolerate slow cold start).
@@ -104,9 +111,7 @@ export default function Crossfader({
       if (anchorA.error) throw new Error(`anchor A: ${anchorA.error}`);
       if (anchorB.error) throw new Error(`anchor B: ${anchorB.error}`);
 
-      // 3) Audio pipeline.
-      const ctx = new AudioContext({ sampleRate: 48000 });
-      ctxRef.current = ctx;
+      // 3) Audio pipeline (context already created in the gesture above).
       await ctx.audioWorklet.addModule("/worklets/pcm-player.js");
       const node = new AudioWorkletNode(ctx, "pcm-player", {
         outputChannelCount: [2],

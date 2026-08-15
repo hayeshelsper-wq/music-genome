@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { computeArtistSonic } from "@/lib/trail";
 import { styleTagsFromSonic } from "@/lib/studioPrompt";
 import { cloudRunAuthHeader } from "@/lib/cloudRun";
+import { getReport } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,13 @@ export async function GET(req: NextRequest) {
   }
   try {
     const sonic = await computeArtistSonic(mbid, name);
-    const text = styleTagsFromSonic(sonic);
+    // Genre/mood words steer MusicCoCa far better than DSP stats alone — the
+    // artist report already carries Last.fm tags ("psychedelic rock", "glam
+    // rock"), so lead with those; without them the generator drifts to
+    // generic rhythm beds.
+    const report = await getReport(mbid).catch(() => null);
+    const genreTags = (report?.tags || []).slice(0, 5).join(", ");
+    const text = [genreTags, styleTagsFromSonic(sonic)].filter(Boolean).join(", ");
 
     let audio_b64: string | null = null;
     const preview = sonic.tracks.find((t) => t.previewUrl)?.previewUrl;
