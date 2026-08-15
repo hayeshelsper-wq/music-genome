@@ -1509,3 +1509,7 @@ a:hover { text-decoration: underline; }
 .cf-meta { text-align: center; font-size: 13px; }
 .cf-endcard { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 .cf-footer { margin-top: 26px; text-align: center; font-size: 12px; }
+
+.extract-suggestions { display: flex; gap: 8px; flex-wrap: wrap; }
+.extract-suggestions .tag-chip { cursor: pointer; }
+.extract-suggestions .tag-chip:disabled { opacity: 0.5; cursor: default; }

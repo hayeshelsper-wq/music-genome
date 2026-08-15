@@ -511,6 +511,20 @@ export default function StemLab({
       {/* Extract anything (SAM Audio) */}
       <div className="extract-row">
         <div className="stat-label">✨ Extract anything <span className="muted">(SAM Audio — AI separation)</span></div>
+        {/* Suggested prompts — pre-seeded in the extraction cache for the
+            showcase tracks, so these come back instantly even on a cold GPU. */}
+        <div className="extract-suggestions">
+          {["the drums", "the bass line", "the lead vocal"].map((s) => (
+            <button
+              key={s}
+              className="tag-chip soft"
+              disabled={extraBusy || !ready}
+              onClick={() => extract(s, span)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
         <div className="extract-controls">
           <input
             className="search-input"

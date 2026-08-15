@@ -22,12 +22,14 @@ interface MapTrack { genre: string; x: number; y: number }
 
 const FEATURES = [
   { href: "/ask", icon: "💬", title: "Ask the Genome", desc: "An AI agent that drives the whole stack to answer questions a search box can't.", accent: "linear-gradient(100deg, var(--influence), var(--collab))" },
-  { href: "/studio", icon: "🎛️", title: "The Genome Studio", desc: "Generate music in an artist's DNA — then score how close it actually landed.", accent: "linear-gradient(100deg, var(--root), var(--descendant))" },
-  { href: "/trail", icon: "🎧", title: "Influence Trails", desc: "Hear & measure the sonic inheritance between two connected artists.", accent: "linear-gradient(100deg, var(--descendant), var(--collab))" },
+  { href: "/studio", icon: "🎛️", title: "The Genome Studio", desc: "Generate music in an artist's DNA — one shot, or an agentic optimize loop that measures and revises until it matches.", accent: "linear-gradient(100deg, var(--root), var(--descendant))" },
+  { href: "/hum", icon: "🎙️", title: "Hum to Genome", desc: "Hum a melody — see it as notes, find it on the map, hear it produced in a real style.", accent: "linear-gradient(100deg, var(--influence), var(--descendant))" },
+  { href: "/crossfade", icon: "🎚", title: "DNA Crossfader", desc: "Two artists, one slider, live generated audio morphing between their measured styles.", accent: "linear-gradient(100deg, var(--descendant), var(--root))" },
+  { href: "/trail", icon: "🎧", title: "Influence Trails", desc: "Hear & measure the inheritance between two artists — how it sounds AND what it plays.", accent: "linear-gradient(100deg, var(--descendant), var(--collab))" },
   { href: "/lineage", icon: "🧭", title: "Lineage Walk", desc: "An auto-playing documentary that walks a chain of musical influence.", accent: "linear-gradient(100deg, var(--root), var(--influence))" },
   { href: "/atlas", icon: "🗺️", title: "The Living Map", desc: "Watch genres evolve across decades on a map of how music sounds.", accent: "linear-gradient(100deg, var(--collab), var(--root))" },
   { href: "/mashup", icon: "🎚️", title: "Mashup Lab", desc: "Vocals from one track, the beat from another — conformed in key & tempo.", accent: "linear-gradient(100deg, var(--influence), var(--root))" },
-  { href: "/showcase", icon: "🔬", title: "Song X-Ray", desc: "Full synthetic metadata for a track — DSP, audio-model read, lyrics & a producer breakdown.", accent: "linear-gradient(100deg, var(--collab), var(--influence))" },
+  { href: "/showcase", icon: "🔬", title: "Song X-Ray", desc: "Full synthetic metadata for a track — DSP, melody transcription, AI-extracted stems & a producer breakdown.", accent: "linear-gradient(100deg, var(--collab), var(--influence))" },
 ];
 
 const GENRE_COLORS: Record<string, string> = {
